@@ -98,6 +98,8 @@ class QniverseCircuit:
         else:
             if any(isinstance(b, Clbit) for b in bits):
                 raise ValueError("Gate '%s' acts on qubits only." % gate.name)
+            if gate.name == "barrier" and len(bits) not in (1, 2):
+                raise ValueError("Gate 'BARRIER' requires 1 or 2 qubits, but got %d" % len(bits))
             if gate.name != "barrier" and len(bits) != gate.num_qubits:
                 raise ValueError(
                     "Gate '%s' acts on %d qubit(s), got %d." % (gate.name, gate.num_qubits, len(bits))
@@ -153,6 +155,12 @@ class QniverseCircuit:
             if gate.name == "barrier" and len(bits) < 2:
                 # Observed on the official SDK (qniverse 1.0.6): qc.qasm() raises this error.
                 raise ValueError("Barrier requires at least two qubits")
+            if gate.name == "barrier":
+                # two qubits = start and end of a span (same register assumed)
+                reg = bits[0].register
+                lo, hi = sorted((bits[0].index, bits[1].index))
+                lines.append("barrier %s;" % ", ".join("%s[%d]" % (reg.prefix, i) for i in range(lo, hi + 1)))
+                continue
             params = "(%s)" % ", ".join(repr(p) for p in gate.params) if gate.params else ""
             lines.append("%s%s%s %s;" % (prefix, gate.name, params, ", ".join(repr(b) for b in bits)))
         return "\n".join(lines) + "\n"

@@ -142,8 +142,9 @@ def to_qniverse(ir: CircuitIR) -> Any:
             # The official SDK (qniverse 1.0.6) raises "Barrier requires at least two qubits" in
             # qc.qasm() for a one-qubit barrier, so such barriers cannot be represented. A barrier
             # has no effect on the unitary; it is omitted here (the IR keeps it, see unrepresentable_barriers).
-            if len(qs) >= 2:
-                qc.add_gate(_gate_object("barrier"), *qs)
+            # add_gate accepts a barrier with exactly two qubits: the start and end of a span.
+            if len(op.qubits) >= 2:
+                qc.add_gate(_gate_object("barrier"), qbits[min(op.qubits)], qbits[max(op.qubits)])
         elif op.condition:
             cname, cval = op.condition
             qc.add_conditional_gate(cregs[cname], int(cval), _gate_object(op.name, op.params), *qs)

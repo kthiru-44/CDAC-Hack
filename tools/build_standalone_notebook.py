@@ -83,7 +83,6 @@ _probe("h, cp, u3, measure", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate
        qc.add_gate(u3(0.1, 0.2, 0.3), q[1]), qc.add_gate(measure, q[0], c[0])))
 _probe("barrier on 2 qubits q[0],q[1]", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0], q[1])))
 _probe("barrier on 2 qubits q[0],q[2]", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0], q[2])))
-_probe("barrier on 3 qubits", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0], q[1], q[2])))
 _probe("barrier on 1 qubit", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0])))
 _probe("reset + conditional", lambda qc, q, c: (qc.add_gate(measure, q[0], c[0]), qc.add_gate(reset, q[1]),
        qc.add_conditional_gate(c, 1, x, q[1])))

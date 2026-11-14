@@ -153,3 +153,10 @@ def test_one_qubit_barrier_is_omitted_with_warning():
     assert result.warnings and "barrier" in result.warnings[0]
     assert any(op.name == "barrier" for op in result.ir.ops)
     assert "barrier" not in result.circuit.qasm()
+
+
+def test_wide_barrier_becomes_start_end_span():
+    from qnvkit.ir import CircuitIR, Register, Op
+    ir = CircuitIR(3, 0, (Register("q", 3),), (), (Op("h", (0,)), Op("barrier", (0, 1, 2)), Op("cx", (0, 2))))
+    result = decompose(ir, {"u3", "cx"})
+    assert "barrier q[0], q[1], q[2];" in result.circuit.qasm()
