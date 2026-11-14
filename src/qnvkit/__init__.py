@@ -12,6 +12,7 @@ from qnvkit.metrics import profile
 from qnvkit.decompose.decomposer import decompose
 from qnvkit.transpile.api import transpile
 from qnvkit.optimize.optimizer import optimize
+from qnvkit.viz import draw_circuit, simulate_circuit
 
 __all__ = [
     "Op",
@@ -26,5 +27,7 @@ __all__ = [
     "decompose",
     "transpile",
     "optimize",
+    "draw_circuit",
+    "simulate_circuit",
 ]
 
