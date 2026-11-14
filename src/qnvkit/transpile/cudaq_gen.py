@@ -25,6 +25,10 @@ NATIVE = {
 
 
 def generate_cudaq_code(circuit: CircuitIR) -> TranspileResult:
+    if not isinstance(circuit, CircuitIR):
+        # also accept a QniverseCircuit (read through qc.qasm())
+        from qnvkit.qsdk_adapter import from_qniverse
+        circuit = from_qniverse(circuit)
     report = TranspilerReport(target="cudaq", target_version=TARGET_VERSION)
     set_metrics(report, circuit)
     qn = qubit_names(circuit)
