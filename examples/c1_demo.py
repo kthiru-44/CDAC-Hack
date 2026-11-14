@@ -10,6 +10,13 @@ Usage:
 
 import sys
 import argparse
+from pathlib import Path
+
+# Ensure src/ is on sys.path
+SRC_DIR = Path(__file__).resolve().parent.parent / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 from qnvkit.ir import CircuitIR, Register, Op
 from qnvkit.metrics import profile
 from qnvkit.decompose.decomposer import decompose
