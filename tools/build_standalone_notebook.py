@@ -54,8 +54,20 @@ print("qnvkit unpacked to", _dir)
 ''' % payload)
 
 diagnose = code('''
-# Which QSDK packages does this Python environment have? (helps if the QSDK is not found below)
-import sys, importlib.util, subprocess
+# Which QSDK packages does this Python environment have?
+import importlib, importlib.util, subprocess, sys
+
+# Ensure Qiskit and Aer are installed for local simulation without exhausting disk quota
+if importlib.util.find_spec("qiskit") is None or importlib.util.find_spec("qiskit_aer") is None:
+    print("Installing lightweight Qiskit & Qiskit Aer (safe mode: purging cache, --no-cache-dir)...")
+    subprocess.run([sys.executable, "-m", "pip", "cache", "purge"], capture_output=True)
+    subprocess.run([
+        sys.executable, "-m", "pip", "install",
+        "--no-cache-dir", "--quiet",
+        "qiskit", "qiskit-aer"
+    ], check=False)
+    importlib.invalidate_caches()
+
 print("Python", sys.version.split()[0])
 for _n in ("Qniverse", "qniverse"):
     print("importable as %r:" % _n, importlib.util.find_spec(_n) is not None)
@@ -149,11 +161,21 @@ print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
 print("qnvkit transpiler ready!")
 ''')
     pip2 = code('''
-# Check available target frameworks in this Python environment.
-# Note: Code generation works for ALL targets (Qiskit, Cirq, CUDA-Q, QSDK)
-# regardless of what is installed on the host. Missing libraries are cleanly
-# reported in the transpiler report without attempting network/disk installation.
-import importlib.util, sys
+# Check and install target frameworks in this Python environment.
+# Note: Code generation works for ALL targets (Qiskit, Cirq, CUDA-Q, QSDK).
+# Installs lightweight Qiskit & Aer for local simulation with cache purge & --no-cache-dir.
+import importlib, importlib.util, subprocess, sys
+
+if importlib.util.find_spec("qiskit") is None or importlib.util.find_spec("qiskit_aer") is None:
+    print("Installing lightweight Qiskit & Qiskit Aer (safe mode: purging cache, --no-cache-dir)...")
+    subprocess.run([sys.executable, "-m", "pip", "cache", "purge"], capture_output=True)
+    subprocess.run([
+        sys.executable, "-m", "pip", "install",
+        "--no-cache-dir", "--quiet",
+        "qiskit", "qiskit-aer"
+    ], check=False)
+    importlib.invalidate_caches()
+
 print("Python", sys.version.split()[0])
 for _m in ("qiskit", "qiskit_aer", "cirq", "cudaq", "Qniverse", "qniverse"):
     print("%-12s %s" % (_m, "available" if importlib.util.find_spec(_m) is not None else "not installed (transpiles successfully; simulation verified where available)"))
