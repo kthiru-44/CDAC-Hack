@@ -162,6 +162,8 @@ def to_qniverse(ir: CircuitIR) -> Any:
                 if len(group) >= 2:
                     qc.add_gate(_gate_object("barrier"), qbits[min(group)], qbits[max(group)])
         elif op.condition:
+            if not isinstance(op.condition, tuple):
+                raise ValueError("The QSDK only supports register-level conditions, got %r." % (op.condition,))
             cname, cval = op.condition
             qc.add_conditional_gate(cregs[cname], int(cval), _gate_object(op.name, op.params), *qs)
         else:

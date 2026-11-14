@@ -8,12 +8,17 @@ classical conditions, and produces CircuitIR with precise line:column diagnostic
 
 from __future__ import annotations
 import math
+import dataclasses
 from typing import List, Dict, Optional, Tuple, Any, Set, Union
 from qnvkit.ir import CircuitIR, Register, QubitRef, ClbitRef, Op, Condition
 from qnvkit.qasm.lexer import QASMLexer, Token
 from qnvkit.qasm.diagnostics import QASMError
 from qnvkit.qasm.expr import ExprEvaluator, evaluate_expression
 from qnvkit.gates import get_gate_def
+from qnvkit.qasm import gate_ops
+
+# Names the OpenQASM 3 standard library spells differently from the QSDK registry.
+GATE_ALIASES = {"U": "u3", "u": "u3", "phase": "p", "cphase": "cp", "cnot": "cx", "CX": "cx", "toffoli": "ccx"}
 
 
 class CustomGateDef:
@@ -41,6 +46,8 @@ class QASM3Parser:
         self.constants: Dict[str, float] = {}
 
     def parse(self) -> CircuitIR:
+        if self._is_at_end():
+            raise QASMError("Empty program: expected at least one statement", 1, 1, self.source)
         while not self._is_at_end():
             self._parse_statement()
 
@@ -61,14 +68,27 @@ class QASM3Parser:
     def _qubit_to_flat(self, reg_name: str, idx: int) -> int:
         if reg_name not in self.qregs:
             raise KeyError(f"Undefined quantum register '{reg_name}'")
+        if reg_name == "__flat__":
+            if 0 <= idx < self.qregs["__flat__"]:
+                return idx
+            raise IndexError(f"Index {idx} out of range for the circuit's {self.qregs['__flat__']} qubits")
         offset = 0
         for r_name, r_size in self.qregs.items():
             if r_name == reg_name:
                 if 0 <= idx < r_size:
                     return offset + idx
                 raise IndexError(f"Index {idx} out of range for {reg_name}[{r_size}]")
-            offset += r_size
+            if r_name != "__flat__":
+                offset += r_size
         raise KeyError(f"Register '{reg_name}' not found")
+
+    def _eval(self, expr_str: str, line: int, col: int) -> float:
+        try:
+            return evaluate_expression(expr_str, variables=self.constants)
+        except QASMError as e:
+            if e.line is None:
+                raise QASMError(e.message, line, col, self.source) from None
+            raise
 
     def _clbit_to_flat(self, reg_name: str, idx: int) -> int:
         if reg_name not in self.cregs:
@@ -151,17 +171,18 @@ class QASM3Parser:
             name = self._consume_kind("IDENT").value
             self._consume("=")
             expr_str = self._collect_until_semicolon()
-            val = evaluate_expression(expr_str, variables=self.constants)
+            val = self._eval(expr_str, t.line, t.col)
             self.constants[name] = val
             self._consume(";")
             return
 
         # 5. Quantum register declaration: qubit[n] name; or qreg name[n];
         if self._match("qubit"):
-            self._consume("[")
-            size_tok = self._consume_kind("NUMBER")
-            size = int(size_tok.value)
-            self._consume("]")
+            size = 1
+            if self._match("["):
+                size_tok = self._consume_kind("NUMBER")
+                size = int(size_tok.value)
+                self._consume("]")
             name = self._consume_kind("IDENT").value
             self._consume(";")
             if name in self.qregs:
@@ -258,9 +279,8 @@ class QASM3Parser:
         # 11. Classical Condition: if (c == 1) ...
         if self._match("if"):
             self._consume("(")
-            cond_obj = self._parse_condition()
+            cond_tuple = self._parse_condition(t)
             self._consume(")")
-            cond_tuple = (cond_obj.register, cond_obj.value)
             if self._match("{"):
                 while not self._match("}") and not self._is_at_end():
                     self._parse_statement(condition=cond_tuple)
@@ -281,18 +301,36 @@ class QASM3Parser:
         # 14. Gate applications and Modifiers (inv@, pow(k)@, ctrl@)
         self._parse_gate_application(condition=condition)
 
-    def _parse_condition(self) -> Condition:
+    def _parse_condition(self, if_tok: Token):
         var_tok = self._consume_kind("IDENT")
         var_name = var_tok.value
+        if var_name not in self.cregs:
+            raise QASMError(f"Undefined classical register '{var_name}'", var_tok.line, var_tok.col, self.source)
+        size = self.cregs[var_name]
         bit_idx = None
         if self._match("["):
+            idx_tok = self._current()
             bit_idx = int(self._consume_kind("NUMBER").value)
             self._consume("]")
+            if not 0 <= bit_idx < size:
+                raise QASMError(f"Index {bit_idx} out of range for {var_name}[{size}]", idx_tok.line, idx_tok.col, self.source)
 
-        op_tok = self._consume_kind("SYMBOL", "Expected comparison operator (==, !=, <, <=, >, >=)")
+        op_tok = self._current()
+        if op_tok.kind != "SYMBOL" or op_tok.value not in ("==", "!=", "<", "<=", ">", ">="):
+            raise QASMError("Expected comparison operator in condition", op_tok.line, op_tok.col, self.source)
+        self.pos += 1
+        if op_tok.value != "==":
+            raise QASMError(f"Unsupported comparison operator '{op_tok.value}' in condition; only '==' can be expressed on the targets",
+                            op_tok.line, op_tok.col, self.source)
         val_tok = self._consume_kind("NUMBER", "Expected integer value in condition")
         val = int(val_tok.value)
-        return Condition(register=var_name, value=val, index=bit_idx, op=op_tok.value)
+        limit = 2 if bit_idx is not None else 2 ** size
+        if not 0 <= val < limit:
+            raise QASMError(f"Condition value {val} does not fit {var_name}" + (f"[{bit_idx}]" if bit_idx is not None else f"[{size}]"),
+                            val_tok.line, val_tok.col, self.source)
+        if bit_idx is not None and size > 1:
+            return Condition(register=var_name, value=val, index=bit_idx)
+        return (var_name, val)
 
     def _parse_for_loop(self, condition: Optional[Tuple[str, int]]) -> None:
         if self._current().value in ("int", "uint") or self._current().value.startswith("uint") or self._current().value.startswith("int"):
@@ -306,17 +344,20 @@ class QASM3Parser:
         self._consume("[")
 
         start_expr = self._collect_until_colon_or_bracket()
-        start_val = int(round(evaluate_expression(start_expr, variables=self.constants)))
+        ft = self._current()
+        start_val = int(round(self._eval(start_expr, ft.line, ft.col)))
         self._consume(":")
 
         step_val = 1
         second_expr = self._collect_until_colon_or_bracket()
         if self._match(":"):
-            step_val = int(round(evaluate_expression(second_expr, variables=self.constants)))
+            step_val = int(round(self._eval(second_expr, ft.line, ft.col)))
             end_expr = self._collect_until_colon_or_bracket()
-            end_val = int(round(evaluate_expression(end_expr, variables=self.constants)))
+            end_val = int(round(self._eval(end_expr, ft.line, ft.col)))
         else:
-            end_val = int(round(evaluate_expression(second_expr, variables=self.constants)))
+            end_val = int(round(self._eval(second_expr, ft.line, ft.col)))
+        if step_val == 0:
+            raise QASMError("for-loop step must not be 0", ft.line, ft.col, self.source)
 
         self._consume("]")
         self._consume("{")
@@ -335,7 +376,7 @@ class QASM3Parser:
             loop_body_tokens.append(t)
             self.pos += 1
 
-        loop_values = range(start_val, end_val + 1, step_val)
+        loop_values = range(start_val, end_val + (1 if step_val > 0 else -1), step_val)
         for val in loop_values:
             local_constants = dict(self.constants)
             local_constants[var_name] = float(val)
@@ -398,19 +439,30 @@ class QASM3Parser:
 
         self.custom_gates[name] = CustomGateDef(name, params, qubits, body_tokens)
 
-    def _parse_gate_application(self, condition: Optional[Tuple[str, int]] = None) -> None:
+    def _parse_gate_application(self, condition=None) -> None:
         start_tok = self._current()
         line, col = start_tok.line, start_tok.col
 
         modifiers: List[Tuple[str, Any]] = []
         while self._current().value in ("inv", "pow", "ctrl", "negctrl"):
-            mod_name = self._consume_kind("KEYWORD").value
+            mod_tok = self._consume_kind("KEYWORD")
+            mod_name = mod_tok.value
             mod_arg = None
             if self._match("("):
                 expr_str = self._collect_until_closing_paren()
-                mod_arg = evaluate_expression(expr_str, variables=self.constants)
+                mod_arg = self._eval(expr_str, mod_tok.line, mod_tok.col)
                 self._consume(")")
             self._consume("@")
+            if mod_name in ("ctrl", "negctrl"):
+                n = 1 if mod_arg is None else mod_arg
+                if abs(n - round(n)) > 1e-12 or int(round(n)) < 1:
+                    raise QASMError(f"{mod_name} needs a positive integer number of controls", mod_tok.line, mod_tok.col, self.source)
+                mod_arg = int(round(n))
+            elif mod_name == "pow":
+                if mod_arg is None:
+                    raise QASMError("pow modifier needs an exponent: pow(k) @", mod_tok.line, mod_tok.col, self.source)
+            elif mod_arg is not None:
+                raise QASMError("inv modifier takes no argument", mod_tok.line, mod_tok.col, self.source)
             modifiers.append((mod_name, mod_arg))
 
         gate_name_tok = self._consume_kind("IDENT", "Expected gate name")
@@ -421,11 +473,21 @@ class QASM3Parser:
             if not self._match(")"):
                 while True:
                     expr_str = self._collect_until_comma_or_paren()
-                    val = evaluate_expression(expr_str, variables=self.constants)
-                    params.append(val)
+                    params.append(self._eval(expr_str, gate_name_tok.line, gate_name_tok.col))
                     if self._match(")"):
                         break
                     self._consume(",")
+
+        if gate_name == "gphase":
+            if any(m[0] in ("ctrl", "negctrl") for m in modifiers):
+                raise QASMError("gphase under ctrl/negctrl would be a relative phase and is not supported", line, col, self.source)
+            if len(params) != 1:
+                raise QASMError(f"Gate 'gphase' expects 1 parameter, got {len(params)}", line, col, self.source)
+            # Global phase is unobservable: accepted and dropped.
+            while self._current().value != ";" and not self._is_at_end():
+                self.pos += 1
+            self._consume(";", "Expected ';' after gphase")
+            return
 
         qubit_targets: List[Union[Tuple[str, int], Tuple[str, None]]] = []
         while True:
@@ -435,121 +497,75 @@ class QASM3Parser:
                 break
             self._consume(",")
 
-        is_broadcast = any(t[1] is None for t in qubit_targets)
-        if is_broadcast:
-            first_reg = next(t[0] for t in qubit_targets if t[1] is None)
-            reg_size = self.qregs[first_reg]
-            for i in range(reg_size):
-                expanded_targets = []
-                for t in qubit_targets:
-                    if t[1] is None:
-                        expanded_targets.append(self._qubit_to_flat(t[0], i))
-                    else:
-                        expanded_targets.append(self._qubit_to_flat(t[0], t[1]))
-                self._apply_resolved_gate(gate_name, params, expanded_targets, modifiers, condition, line, col)
-        else:
-            flat_qubits = [self._qubit_to_flat(t[0], t[1]) for t in qubit_targets]
-            self._apply_resolved_gate(gate_name, params, flat_qubits, modifiers, condition, line, col)
-
-    def _apply_resolved_gate(
-        self,
-        gate_name: str,
-        params: List[float],
-        qubits: List[int],
-        modifiers: List[Tuple[str, Any]],
-        condition: Optional[Tuple[str, int]],
-        line: int,
-        col: int
-    ) -> None:
+        # Resolve the gate (custom or standard) and validate counts before expanding broadcasts.
         if gate_name in self.custom_gates:
-            self._inline_custom_gate(gate_name, params, qubits, modifiers, condition, line, col)
-            return
+            cg = self.custom_gates[gate_name]
+            base_arity, base_nparams = len(cg.qubits), len(cg.params)
+            norm_name = gate_name
+        else:
+            norm_name = GATE_ALIASES.get(gate_name, gate_name.lower())
+            try:
+                info = get_gate_def(norm_name)
+            except ValueError:
+                raise QASMError(f"Unknown gate '{gate_name}'", gate_name_tok.line, gate_name_tok.col, self.source) from None
+            base_arity, base_nparams = info.arity, info.num_params
+        n_ctrl = sum(m[1] for m in modifiers if m[0] in ("ctrl", "negctrl"))
+        if len(params) != base_nparams:
+            raise QASMError(f"Gate '{gate_name}' expects {base_nparams} parameter(s), got {len(params)}",
+                            gate_name_tok.line, gate_name_tok.col, self.source)
+        if len(qubit_targets) != base_arity + n_ctrl:
+            raise QASMError(f"Gate '{gate_name}' expects {base_arity + n_ctrl} qubit operand(s), got {len(qubit_targets)}",
+                            gate_name_tok.line, gate_name_tok.col, self.source)
 
-        final_gate_name = gate_name.lower()
-        final_params = list(params)
-        final_qubits = list(qubits)
+        sizes = {self.qregs[t[0]] for t in qubit_targets if t[1] is None}
+        if len(sizes) > 1:
+            raise QASMError("Broadcast registers must have the same size", line, col, self.source)
+        reg_size = sizes.pop() if sizes else None
+        reps = range(reg_size) if reg_size is not None else [None]
+        for i in reps:
+            flat = [self._qubit_to_flat(t[0], i if t[1] is None else t[1]) for t in qubit_targets]
+            if len(set(flat)) != len(flat):
+                raise QASMError(f"Gate '{gate_name}' applied to the same qubit more than once", line, col, self.source)
+            self._apply_resolved_gate(gate_name, norm_name, params, flat, modifiers, condition, line, col)
 
-        for mod_name, mod_arg in reversed(modifiers):
-            if mod_name == "inv":
-                if final_gate_name == "s":
-                    final_gate_name = "sdg"
-                elif final_gate_name == "sdg":
-                    final_gate_name = "s"
-                elif final_gate_name == "t":
-                    final_gate_name = "tdg"
-                elif final_gate_name == "tdg":
-                    final_gate_name = "t"
-                elif final_gate_name == "sx":
-                    final_gate_name = "sxdg"
-                elif final_gate_name == "sxdg":
-                    final_gate_name = "sx"
-                elif final_gate_name in ("rx", "ry", "rz", "p", "phase", "u1"):
-                    if final_params:
-                        final_params[0] = -final_params[0]
-                elif final_gate_name in ("u", "u3"):
-                    if len(final_params) >= 3:
-                        final_params = [-final_params[0], -final_params[2], -final_params[1]]
-                elif final_gate_name in ("x", "y", "z", "h", "cx", "cz", "swap", "ccx"):
-                    pass
+    def _apply_resolved_gate(self, gate_name, norm_name, params, qubits, modifiers, condition, line, col) -> None:
+        n_ctrl_total = sum(m[1] for m in modifiers if m[0] in ("ctrl", "negctrl"))
+        ctrl_qubits = list(qubits[:n_ctrl_total])
+        base_qubits = list(qubits[n_ctrl_total:])
+        if gate_name in self.custom_gates:
+            ops = self._inline_custom_gate(gate_name, params, base_qubits, line, col)
+        else:
+            ops = [Op(name=norm_name, qubits=tuple(base_qubits), params=tuple(params), line=line, col=col)]
+
+        # Ctrl qubits of each modifier, left to right (outermost modifier takes the first operands).
+        slices = []
+        pos = 0
+        for m_name, m_arg in modifiers:
+            if m_name in ("ctrl", "negctrl"):
+                slices.append(ctrl_qubits[pos:pos + m_arg])
+                pos += m_arg
+            else:
+                slices.append(None)
+        try:
+            for (m_name, m_arg), ctl in reversed(list(zip(modifiers, slices))):
+                if m_name == "inv":
+                    ops = gate_ops.inverse_ops(ops)
+                elif m_name == "pow":
+                    ops = gate_ops.power_ops(ops, float(m_arg))
+                elif m_name == "ctrl":
+                    ops = gate_ops.controlled_ops(ops, ctl)
                 else:
-                    raise QASMError(f"inv modifier not supported for gate '{final_gate_name}'", line, col, self.source)
-            elif mod_name == "ctrl":
-                if final_gate_name == "x":
-                    final_gate_name = "cx"
-                elif final_gate_name == "z":
-                    final_gate_name = "cz"
-                elif final_gate_name == "cx":
-                    final_gate_name = "ccx"
-            elif mod_name == "pow":
-                power = float(mod_arg) if mod_arg is not None else 1.0
-                if final_gate_name in ("rx", "ry", "rz", "p", "phase", "u1") and final_params:
-                    final_params[0] = final_params[0] * power
-                elif final_gate_name == "z" and abs(power - 0.5) < 1e-9:
-                    final_gate_name = "s"
-                elif final_gate_name == "s" and abs(power - 0.5) < 1e-9:
-                    final_gate_name = "t"
-                elif final_gate_name == "z" and abs(power - 0.25) < 1e-9:
-                    final_gate_name = "t"
-                elif power.is_integer() and int(power) >= 1:
-                    k = int(power)
-                    for _ in range(k):
-                        self.ops.append(Op(
-                            name=final_gate_name,
-                            qubits=tuple(final_qubits),
-                            params=tuple(final_params),
-                            condition=condition,
-                            line=line,
-                            col=col
-                        ))
-                    return
-                else:
-                    raise QASMError(f"pow({power}) modifier not supported for gate '{final_gate_name}'", line, col, self.source)
+                    flips = [Op("x", (c,), line=line, col=col) for c in ctl]
+                    ops = flips + gate_ops.controlled_ops(ops, ctl) + flips
+        except QASMError as e:
+            if e.line is None:
+                raise QASMError(e.message, line, col, self.source) from None
+            raise
+        for o in ops:
+            self.ops.append(dataclasses.replace(o, condition=condition, line=line, col=col))
 
-        self.ops.append(Op(
-            name=final_gate_name,
-            qubits=tuple(final_qubits),
-            params=tuple(final_params),
-            condition=condition,
-            line=line,
-            col=col
-        ))
-
-    def _inline_custom_gate(
-        self,
-        gate_name: str,
-        params: List[float],
-        qubits: List[int],
-        modifiers: List[Tuple[str, Any]],
-        condition: Optional[Tuple[str, int]],
-        line: int,
-        col: int
-    ) -> None:
+    def _inline_custom_gate(self, gate_name, params, qubits, line, col) -> List[Op]:
         cg = self.custom_gates[gate_name]
-        if len(params) != len(cg.params):
-            raise QASMError(f"Gate '{gate_name}' expects {len(cg.params)} parameters, got {len(params)}", line, col, self.source)
-        if len(qubits) != len(cg.qubits):
-            raise QASMError(f"Gate '{gate_name}' expects {len(cg.qubits)} qubits, got {len(qubits)}", line, col, self.source)
-
         param_sub = {formal: actual for formal, actual in zip(cg.params, params)}
         q_map = {reg: flat_idx for reg, flat_idx in zip(cg.qubits, qubits)}
 
@@ -557,7 +573,6 @@ class QASM3Parser:
         for tok in cg.body_tokens:
             if tok.kind == "IDENT" and tok.value in q_map:
                 flat_idx = q_map[tok.value]
-                # Synthesize flat wire access using special __flat__ register
                 sub_tokens.extend([
                     Token("IDENT", "__flat__", tok.line, tok.col),
                     Token("SYMBOL", "[", tok.line, tok.col),
@@ -565,7 +580,9 @@ class QASM3Parser:
                     Token("SYMBOL", "]", tok.line, tok.col)
                 ])
             elif tok.kind == "IDENT" and tok.value in param_sub:
-                sub_tokens.append(Token("NUMBER", str(param_sub[tok.value]), tok.line, tok.col))
+                sub_tokens.extend([Token("SYMBOL", "(", tok.line, tok.col),
+                                   Token("NUMBER", repr(float(param_sub[tok.value])), tok.line, tok.col),
+                                   Token("SYMBOL", ")", tok.line, tok.col)])
             else:
                 sub_tokens.append(tok)
         sub_tokens.append(Token("EOF", "", 0, 0))
@@ -573,15 +590,17 @@ class QASM3Parser:
         sub_parser = QASM3Parser(self.source, name=self.name)
         sub_parser.tokens = sub_tokens
         sub_parser.pos = 0
-        total_qubits = sum(self.qregs.values())
+        total_qubits = sum(n for k, n in self.qregs.items() if k != "__flat__")
         sub_parser.qregs = dict(self.qregs)
         sub_parser.qregs["__flat__"] = total_qubits
         sub_parser.cregs = self.cregs
-        sub_parser.ops = self.ops
+        out: List[Op] = []
+        sub_parser.ops = out
         sub_parser.custom_gates = self.custom_gates
         sub_parser.constants = self.constants
         while not sub_parser._is_at_end():
-            sub_parser._parse_statement(condition=condition)
+            sub_parser._parse_statement(condition=None)
+        return out
 
     def _parse_bit_or_register_ref(self, is_quantum: bool = True) -> Tuple[str, Optional[int]]:
         name_tok = self._consume_kind("IDENT")
@@ -608,7 +627,10 @@ class QASM3Parser:
                 expr_tokens.append(t.value)
                 self.pos += 1
             expr_str = " ".join(expr_tokens)
-            idx = int(round(evaluate_expression(expr_str, variables=self.constants)))
+            idx = int(round(self._eval(expr_str, start_line, start_col)))
+            size = reg_map[name] if name != "__flat__" else self.qregs["__flat__"]
+            if not 0 <= idx < size:
+                raise QASMError(f"Index {idx} out of range for {name}[{size}]", start_line, start_col, self.source)
             return (name, idx)
         else:
             return (name, None)

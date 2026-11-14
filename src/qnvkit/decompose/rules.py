@@ -211,6 +211,13 @@ def decompose_two_qubit_gate(op: Op, basis: Set[str]) -> Optional[List[Op]]:
         lam = params[1] if len(params) > 1 else 0.0
         return decompose_two_qubit_gate(Op("cu3", (c, t), params=(np.pi / 2.0, phi, lam), condition=cond), basis)
 
+    if name == "cu":
+        theta, phi, lam, gamma = (list(params) + [0.0] * 4)[:4]
+        return [
+            Op("p", (c,), params=(gamma,), condition=cond),
+            Op("cu3", (c, t), params=(theta, phi, lam), condition=cond),
+        ]
+
     if name == "cu3":
         theta = params[0] if len(params) > 0 else 0.0
         phi = params[1] if len(params) > 1 else 0.0

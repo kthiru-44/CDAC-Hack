@@ -5,7 +5,7 @@ qnvkit.qasm.lexer: Universal tokenizer for OpenQASM 2.0 and 3.0 with source loca
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import List, Optional, Any
-from qnvkit.qasm.diagnostics import SourceLocation, Diagnostic
+from qnvkit.qasm.diagnostics import SourceLocation, Diagnostic, QASMError
 
 
 class TokenType(Enum):
@@ -30,6 +30,7 @@ class TokenType(Enum):
     STAR = auto()        # *
     SLASH = auto()       # /
     CARET = auto()       # ^ or **
+    OPERATOR = auto()    # != <= >= < > (comparison operators)
     EOF = auto()
 
 
@@ -159,6 +160,14 @@ class QASMLexer:
                 self._advance(); self._advance()
                 tokens.append(Token(TokenType.EQUALS, "==", loc))
                 continue
+            if ch in "!<>" and self._peek(1) == "=":
+                self._advance(); self._advance()
+                tokens.append(Token(TokenType.OPERATOR, ch + "=", loc))
+                continue
+            if ch in "<>":
+                self._advance()
+                tokens.append(Token(TokenType.OPERATOR, ch, loc))
+                continue
             if ch == "*" and self._peek(1) == "*":
                 self._advance(); self._advance()
                 tokens.append(Token(TokenType.CARET, "**", loc))
@@ -182,6 +191,7 @@ class QASMLexer:
                 "*": TokenType.STAR,
                 "/": TokenType.SLASH,
                 "^": TokenType.CARET,
+                "%": TokenType.OPERATOR,
             }
             if ch in simple_tokens:
                 self._advance()
@@ -221,7 +231,7 @@ class QASMLexer:
 
             # Unknown character
             bad_ch = self._advance()
-            raise ValueError(f"Unexpected character '{bad_ch}' at {loc}")
+            raise QASMError(f"Unexpected character '{bad_ch}'", loc.line, loc.col, self.source)
 
         tokens.append(Token(TokenType.EOF, "", SourceLocation(self.line, self.col, self.filename)))
         return tokens

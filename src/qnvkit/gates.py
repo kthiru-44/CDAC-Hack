@@ -224,6 +224,11 @@ GATE_REGISTRY: Dict[str, GateInfo] = {
     "barrier": GateInfo("barrier", 1, 0, False),
 }
 
+def _mat_cu(params):
+    theta, phi, lam, gamma = (list(params) + [0.0] * 4)[:4]
+    return _make_controlled(np.exp(1j * gamma) * _mat_u3((theta, phi, lam)))
+
+
 # Standard OpenQASM 3 stdgates outside QSDK 40
 _SX = 0.5 * np.array([[1 + 1j, 1 - 1j], [1 - 1j, 1 + 1j]], dtype=complex)
 _SXDG = np.conjugate(_SX.T)
@@ -234,6 +239,7 @@ STDGATES_REGISTRY: Dict[str, GateInfo] = {
     "u": GateInfo("u", 1, 3, True, matrix_fn=_mat_u3),
     "cnot": GateInfo("cnot", 2, 0, True, is_self_inverse=True, matrix_fn=_mat_cx),
     "toffoli": GateInfo("toffoli", 3, 0, True, is_self_inverse=True, matrix_fn=_mat_ccx),
+    "cu": GateInfo("cu", 2, 4, True, matrix_fn=_mat_cu),
     "phase": GateInfo("phase", 1, 1, True, matrix_fn=_mat_p),
     "cphase": GateInfo("cphase", 2, 1, True, matrix_fn=_mat_cp),
 }

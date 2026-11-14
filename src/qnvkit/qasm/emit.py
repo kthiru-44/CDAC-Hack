@@ -2,7 +2,7 @@
 qnvkit.qasm.emit: OpenQASM 2.0 and OpenQASM 3.0 emitter from CircuitIR.
 """
 
-from qnvkit.ir import CircuitIR
+from qnvkit.ir import CircuitIR, Condition
 
 
 def emit_qasm2(ir: CircuitIR) -> str:
@@ -33,8 +33,13 @@ def emit_qasm3(ir: CircuitIR) -> str:
 
         prefix = ""
         if op.condition:
-            cname, cval = op.condition
-            prefix = f"if ({cname} == {cval}) "
+            if isinstance(op.condition, Condition):
+                c = op.condition
+                target = f"{c.register}[{c.index}]" if c.index is not None else c.register
+                prefix = f"if ({target} == {c.value}) "
+            else:
+                cname, cval = op.condition
+                prefix = f"if ({cname} == {cval}) "
 
         if op.name == "barrier":
             lines.append(f"{prefix}barrier {', '.join(q_args)};")

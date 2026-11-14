@@ -53,6 +53,12 @@ class Condition:
         target = f"{self.register}[{self.index}]" if self.index is not None else self.register
         return f"{target} {self.op} {self.value}"
 
+    # Not iterable on purpose: ``name, value = condition`` would silently drop the bit index.
+    __iter__ = None
+
+    def __getitem__(self, i):
+        return (self.register, self.value)[i]
+
     def to_tuple(self) -> Tuple[str, int]:
         return (self.register, self.value)
 
@@ -228,7 +234,12 @@ class CircuitIR:
 
             prefix = ""
             if op.condition:
-                cname, cval = op.condition
+                if isinstance(op.condition, Condition):
+                    cname, cval = op.condition.register, op.condition.value
+                    if op.condition.index is not None:
+                        raise ValueError(f"OpenQASM 2.0 cannot express the bit-level condition {op.condition!r}")
+                else:
+                    cname, cval = op.condition
                 prefix = f"if({cname}=={cval}) "
 
             if op.name == "barrier":
