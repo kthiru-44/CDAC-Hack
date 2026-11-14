@@ -158,3 +158,19 @@ When `--verify` is passed, the transpiler verifies circuit equivalence:
 1. **Dynamic Runtime Loops:** OpenQASM 3 `while` loops depend on real-time classical feedback during execution. Since target hardware and cloud simulators in Qniverse execute static compiled graphs, dynamic `while` loops are rejected with an explicit line:column diagnostic.
 2. **Pulse Calibration (`defcal`):** Pulse-level timing controls (`delay`, `cal`) are flagged as unsupported, as the transpiler targets gate-level intermediate representations.
 3. **Local CUDA-Q Execution:** When running on CPU-only workstations without CUDA-Q installed, the transpiler generates syntactically valid `@cudaq.kernel` code and marks local execution as skipped, ready for dispatch to Qniverse GPU nodes (`Param_Utkarsh` / `QACC_Cluster`).
+
+---
+
+## 7. Qniverse Platform Backend Compatibility Matrix
+
+All frameworks transpiled by QC-C2-03 correspond directly to verified C-DAC Qniverse backend simulators available on **Param Utkarsh** and **QACC Cluster** (verified against `/wp-json/qacc/v1/backends`):
+
+| Transpiler Target | Target Version | Supported Qniverse HPC Simulator | Processor | Cluster Target |
+|---|---|---|---|---|
+| **Qiskit** | `qiskit>=1.0.0` | `qasm_simulator`, `aer_simulator_statevector`, `aer_simulator_density_matrix` | CPU | `Param_Utkarsh`, `QACC_Cluster` |
+| **Qiskit GPU** | `qiskit>=1.0.0` | `aer_simulator_statevector_gpu` (NVIDIA cuStateVec) | GPU | `Param_Utkarsh`, `QACC_Cluster` |
+| **Cirq** | `cirq>=1.4.0` | `cirq_simulator`, `qsimcirq_simulator` (Google qsim) | CPU | `Param_Utkarsh`, `QACC_Cluster` |
+| **Cirq GPU** | `cirq>=1.4.0` | `qsimcirq_cuquantum_gpu_simulator` (NVIDIA cuQuantum) | GPU | `QACC_Cluster` |
+| **NVIDIA CUDA-Q** | `cudaq>=0.8.0` | `nvidia_cudaq_statevector_simulator` | GPU | `QACC_Cluster` |
+| **C-DAC QSDK** | `QSDK (1.6+)` | Native `QniverseCircuit` via `to_qniverse()` / `run()` | CPU / GPU | `Param_Utkarsh`, `QACC_Cluster` |
+
