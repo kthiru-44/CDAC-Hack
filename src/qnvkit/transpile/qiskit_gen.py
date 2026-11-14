@@ -14,7 +14,11 @@ from qnvkit.report import TranspilerReport, TranspileResult
 TARGET_VERSION = "qiskit>=1.0.0"
 
 
-def generate_qiskit_code(circuit: CircuitIR) -> TranspileResult:
+def generate_qiskit_code(circuit: Any) -> TranspileResult:
+    if not isinstance(circuit, CircuitIR):
+        from qnvkit.qsdk_adapter import from_qniverse
+        circuit = from_qniverse(circuit)
+
     report = TranspilerReport(
         target="qiskit",
         target_version=TARGET_VERSION

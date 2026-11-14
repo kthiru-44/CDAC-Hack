@@ -14,7 +14,11 @@ from qnvkit.report import TranspilerReport, TranspileResult
 TARGET_VERSION = "QSDK (Qniverse 1.6+)"
 
 
-def generate_qniverse_code(circuit: CircuitIR) -> TranspileResult:
+def generate_qniverse_code(circuit: Any) -> TranspileResult:
+    if not isinstance(circuit, CircuitIR):
+        from qnvkit.qsdk_adapter import from_qniverse
+        circuit = from_qniverse(circuit)
+
     report = TranspilerReport(
         target="qniverse",
         target_version=TARGET_VERSION

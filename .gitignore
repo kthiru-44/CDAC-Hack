@@ -226,3 +226,6 @@ graphify-out/
 
 # local virtual environments
 .venv*/
+
+# Unpacked standalone notebook package
+qnvkit_pkg/

@@ -55,6 +55,9 @@ def transpile(
 
     if isinstance(source, CircuitIR):
         circuit = source
+    elif hasattr(source, "qasm"):
+        from qnvkit.qsdk_adapter import from_qniverse
+        circuit = from_qniverse(source)
     else:
         source_text = source
         if isinstance(source, Path) or (isinstance(source, str) and (os.path.isfile(source) or source.endswith(".qasm"))):

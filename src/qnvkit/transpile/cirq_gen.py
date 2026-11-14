@@ -14,7 +14,11 @@ from qnvkit.report import TranspilerReport, TranspileResult
 TARGET_VERSION = "cirq>=1.4.0"
 
 
-def generate_cirq_code(circuit: CircuitIR) -> TranspileResult:
+def generate_cirq_code(circuit: Any) -> TranspileResult:
+    if not isinstance(circuit, CircuitIR):
+        from qnvkit.qsdk_adapter import from_qniverse
+        circuit = from_qniverse(circuit)
+
     report = TranspilerReport(
         target="cirq",
         target_version=TARGET_VERSION
