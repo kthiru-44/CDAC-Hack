@@ -4,7 +4,7 @@ The rules allow AI tools for coding, debugging, research, documentation and revi
 
 | Where | What it was used for | Tool / model | Reviewed by |
 |---|---|---|---|
-| `docs/` (planning docs, templates) | Strategy, Qniverse gap analysis, documentation scaffolding | Claude Code (Claude Opus 5.5, `claude-opus-5-5`) | |
+| `docs/` (planning docs, templates) | Problem selection, planning docs, documentation scaffolding | Claude Code (Claude Sonnet 5.5, `claude-sonnet-5-5`) | |
 | | | | |
 | | | | |
 

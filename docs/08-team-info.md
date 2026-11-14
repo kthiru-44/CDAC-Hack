@@ -9,5 +9,4 @@
 | 3 | | | |
 | 4 | | | |
 
-**Project:** QOpt, a verified, noise-aware circuit optimiser for Qniverse
-**Domain:** 2, Quantum circuit optimisation and compilation
+**Problems:** QC-C1-01 (Class 1), QC-C2-03 (Class 2), QC-C3-03 (Class 3)
