@@ -23,14 +23,14 @@ def test_cirq_code_generation_and_execution():
     assert "cirq.CNOT(q[0], q[1])" in res.code
     assert "cirq.measure(q[0], key='c_0')" in res.code
 
-    # Execute generated Cirq code directly
+    # Execute generated Cirq code directly if installed
+    cirq = pytest.importorskip("cirq")
     namespace = {}
     exec(res.code, namespace)
     assert "build_circuit" in namespace
     circuit = namespace["build_circuit"]()
 
     assert len(circuit.all_qubits()) == 2
-    import cirq
     sim = cirq.Simulator()
     result = sim.run(circuit, repetitions=100)
     assert "c_0" in result.records
