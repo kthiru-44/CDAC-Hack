@@ -1,0 +1,254 @@
+"""
+qnvkit.report: Standardized structured report dataclasses for Qniverse hackathon modules.
+"""
+
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional, Any, Tuple
+
+
+@dataclass(frozen=True)
+class ProfileReport:
+    """Structured metrics for a quantum circuit."""
+    total_gates: int
+    gate_counts: Dict[str, int]
+    qubits_declared: int
+    qubits_used: int
+    single_qubit_gates: int
+    two_qubit_gates: int
+    multi_qubit_gates: int  # >2 qubits (e.g. ccx, cswap, c3x, c4x, c5x)
+    depth: int              # Earliest-available-layer scheduled depth
+    measurements: int = 0
+    resets: int = 0
+    barriers: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def summary(self) -> str:
+        lines = [
+            f"--- Circuit Profile Report ---",
+            f"Total Gates (unitary): {self.total_gates} | Depth: {self.depth}",
+            f"Qubits (Declared / Used): {self.qubits_declared} / {self.qubits_used}",
+            f"Single-qubit gates: {self.single_qubit_gates} | Multi-qubit gates (2 or more qubits): "
+            f"{self.two_qubit_gates + self.multi_qubit_gates} (two-qubit: {self.two_qubit_gates}, three or more: {self.multi_qubit_gates})",
+            f"Non-Unitary: Meas={self.measurements}, Reset={self.resets}, Barrier={self.barriers}",
+            f"Count by operation type: {self.gate_counts}",
+        ]
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class UnsupportedReport:
+    """Explicit report for operations that cannot be represented or decomposed into the target basis."""
+    unsupported_gates: Tuple[Dict[str, Any], ...]
+    is_valid: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "is_valid": self.is_valid,
+            "unsupported_gates": list(self.unsupported_gates),
+        }
+
+    def summary(self) -> str:
+        if not self.unsupported_gates:
+            return "All operations supported."
+        lines = ["--- Unsupported Operations Report ---"]
+        for item in self.unsupported_gates:
+            lines.append(f"  • Gate '{item.get('gate')}' on qubits {item.get('qubits')}: {item.get('reason')}")
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class DecomposeResult:
+    """Result of basis gate decomposition (QC-C1-01)."""
+    circuit: Optional[Any]  # QniverseCircuit (or None if unsupported)
+    ir: Optional[Any]       # CircuitIR
+    before: Optional[ProfileReport]
+    after: Optional[ProfileReport]
+    unsupported: Optional[UnsupportedReport]
+    verified: bool = False  # True only if the equivalence check ran and passed
+    verification_note: str = ""  # which check ran, or why it was skipped
+    warnings: Tuple[str, ...] = ()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "success": self.circuit is not None,
+            "verified": self.verified,
+            "verification_note": self.verification_note,
+            "warnings": list(self.warnings),
+            "before": self.before.to_dict() if self.before else None,
+            "after": self.after.to_dict() if self.after else None,
+            "unsupported": self.unsupported.to_dict() if self.unsupported else None,
+        }
+
+    def summary(self) -> str:
+        status = "SUCCESS" if self.circuit is not None else "FAILED (Unsupported Operations)"
+        lines = [
+            f"==========================================",
+            f"Basis Decomposition: {status}",
+            f"Equivalence Verified: {self.verified}" + (f" ({self.verification_note})" if self.verification_note else ""),
+        ]
+        if self.before:
+            lines.extend([f"--- Metrics Before Decomposition ---", self.before.summary()])
+        if self.after:
+            lines.extend([
+                f"--- Metrics After Decomposition ---",
+                self.after.summary(),
+            ])
+        for w in self.warnings:
+            lines.append(f"WARNING: {w}")
+        if self.unsupported and self.unsupported.unsupported_gates:
+            lines.append(self.unsupported.summary())
+        lines.append(f"==========================================")
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class OptimizeResult:
+    """Result of circuit optimization (QC-C3-03)."""
+    circuit: Any                       # new QniverseCircuit (the input is never modified)
+    ir: Any                            # the optimized circuit as CircuitIR
+    before: ProfileReport
+    after: ProfileReport
+    passes_applied: Tuple[str, ...]
+    reduction_percentage: float        # drop in gate count, in percent
+    warnings: Tuple[str, ...] = ()
+    equivalence_verified: Optional[bool] = None   # None: the check was not run
+    rounds: int = 1                    # how many times the pass list was applied
+
+    @property
+    def gates_removed(self) -> int:
+        return self.before.total_gates - self.after.total_gates
+
+    @property
+    def depth_reduction_percentage(self) -> float:
+        if not self.before.depth:
+            return 0.0
+        return round(100.0 * (self.before.depth - self.after.depth) / self.before.depth, 2)
+
+    def summary(self) -> str:
+        verdict = {True: "verified (equal up to global phase)", False: "FAILED",
+                   None: "not checked"}[self.equivalence_verified]
+        lines = [
+            "--- Optimization Report ---",
+            f"Passes: {', '.join(self.passes_applied)} ({self.rounds} round{'s' if self.rounds != 1 else ''})",
+            f"Gates: {self.before.total_gates} -> {self.after.total_gates} "
+            f"({self.gates_removed} removed, {self.reduction_percentage}%)",
+            f"Depth: {self.before.depth} -> {self.after.depth} ({self.depth_reduction_percentage}%)",
+            f"Operation counts after: {self.after.gate_counts}",
+            f"Equivalence: {verdict}",
+        ]
+        lines += [f"Warning: {w}" for w in self.warnings]
+        return "\n".join(lines)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "before": self.before.to_dict(),
+            "after": self.after.to_dict(),
+            "passes_applied": list(self.passes_applied),
+            "reduction_percentage": self.reduction_percentage,
+            "depth_reduction_percentage": self.depth_reduction_percentage,
+            "equivalence_verified": self.equivalence_verified,
+            "rounds": self.rounds,
+            "warnings": list(self.warnings),
+        }
+
+
+from qnvkit.qasm.diagnostics import Diagnostic
+
+
+@dataclass
+class TranspilerReport:
+    """Result of OpenQASM 3.0 transpilation (QC-C2-03)."""
+    target: str
+    target_version: str
+    status: str = "SUCCESS"  # "SUCCESS", "WARNING", "ERROR"
+    warnings: List[str] = field(default_factory=list)
+    unsupported_constructs: List[Dict[str, Any]] = field(default_factory=list)
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    qubit_mapping: Dict[str, Any] = field(default_factory=dict)
+    clbit_mapping: Dict[str, Any] = field(default_factory=dict)
+    equivalence_verified: Optional[bool] = None
+    fidelity: Optional[float] = None
+    execution_notes: Optional[str] = None
+    notes: List[str] = field(default_factory=list)  # informational; never changes status
+
+    def add_note(self, msg: str) -> None:
+        if msg not in self.notes:
+            self.notes.append(msg)
+
+    def add_warning(self, msg: str) -> None:
+        self.warnings.append(msg)
+        if self.status == "SUCCESS":
+            self.status = "WARNING"
+
+    def add_unsupported(self, construct: str, line: Optional[int] = None, col: Optional[int] = None) -> None:
+        self.unsupported_constructs.append({
+            "construct": construct,
+            "line": line,
+            "col": col,
+            "message": f"Unsupported construct: {construct}"
+        })
+        self.status = "ERROR"
+
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "target": self.target,
+            "target_version": self.target_version,
+            "status": self.status,
+            "warnings": list(self.warnings),
+            "unsupported_constructs": list(self.unsupported_constructs),
+            "metrics": self.metrics,
+            "qubit_mapping": self.qubit_mapping,
+            "clbit_mapping": self.clbit_mapping,
+            "equivalence_verified": self.equivalence_verified,
+            "fidelity": self.fidelity,
+            "execution_notes": self.execution_notes,
+            "notes": list(self.notes),
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        import json
+        return json.dumps(self.to_dict(), indent=indent)
+
+
+
+TranspileReport = TranspilerReport
+
+
+@dataclass
+class TranspileResult:
+    """Target transpilation outcome with code and report."""
+    target: str
+    code: str
+    report: TranspilerReport
+
+    def __getitem__(self, key: str) -> Any:
+        if key == "code":
+            return self.code
+        elif key == "report":
+            return self.report
+        elif key == "target":
+            return self.target
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "target": self.target,
+            "code": self.code,
+            "report": self.report.to_dict()
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        import json
+        return json.dumps(self.to_dict(), indent=indent)
+
+
+

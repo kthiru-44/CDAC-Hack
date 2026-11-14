@@ -227,6 +227,9 @@ graphify-out/
 # local virtual environments
 .venv*/
 
+# Submission archives
+*.zip
+
 # Unpacked standalone notebook package
 qnvkit_pkg/
 .virtual_documents/
