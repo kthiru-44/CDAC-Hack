@@ -1,6 +1,6 @@
 # 08 — Team Information (Deliverable #1)
 
-**Team name:** ____________
+**Team name:** Cat-in-the-box_PESU
 
 | # | Name | Qniverse User (ID) | Registered Qniverse email ID | Role |
 |---|---|---|---|---|
