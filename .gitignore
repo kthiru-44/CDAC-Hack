@@ -229,3 +229,4 @@ graphify-out/
 
 # Unpacked standalone notebook package
 qnvkit_pkg/
+.virtual_documents/
