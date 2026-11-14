@@ -66,6 +66,33 @@ from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, Classical
 import Qniverse.gates as _qgates  # noqa: E402
 
 
+def _qniverse_circuit_draw(self, output="text", filename=None):
+    """Renders visual diagram for QniverseCircuit using Qiskit or rich fallback."""
+    if filename or (isinstance(output, str) and output.endswith((".svg", ".png", ".pdf"))):
+        target_file = filename or output
+        try:
+            if hasattr(self, "_orig_draw") and callable(self._orig_draw):
+                return self._orig_draw(target_file)
+        except Exception:
+            pass
+    try:
+        from qiskit import QuantumCircuit as QC
+        qasm_text = read_qasm(self)
+        drawn = QC.from_qasm_str(qasm_text).draw(output=output or "text")
+        print(drawn)
+        return drawn
+    except Exception:
+        from qnvkit.viz import draw_circuit
+        drawn = draw_circuit(self, output=output or "text")
+        print(drawn)
+        return drawn
+
+
+if not hasattr(QniverseCircuit, "_orig_draw"):
+    QniverseCircuit._orig_draw = getattr(QniverseCircuit, "draw", None)
+    QniverseCircuit.draw = _qniverse_circuit_draw
+
+
 def qsdk_description() -> str:
     if IS_LIVE_QNIVERSE:
         return "official Qniverse QSDK (imported as '%s')" % QSDK_IMPORT_NAME

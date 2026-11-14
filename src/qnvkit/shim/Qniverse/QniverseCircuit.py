@@ -136,8 +136,14 @@ class QniverseCircuit:
     def list_gates(self):
         return [n for n in _GATE_PARAMS]
 
-    def draw(self, filename=None):
-        return self.qasm()
+    def draw(self, output="text", filename=None):
+        try:
+            from qiskit import QuantumCircuit as QC
+            drawn = QC.from_qasm_str(self.qasm()).draw(output=output or "text")
+            print(drawn)
+            return drawn
+        except Exception:
+            return self.qasm()
 
     # ---- export ----------------------------------------------------------
     def qasm(self, shots=None):
