@@ -40,9 +40,21 @@ class QniverseCircuit:
             raise TypeError(f"Unknown register type: {type(reg)}")
 
     def add_gate(self, gate: str, *qubits, params=None):
+        g_name = gate.lower() if isinstance(gate, str) else getattr(gate, "name", str(gate)).lower()
+        if g_name == "measure":
+            q_idx = qubits[0]
+            c_idx = qubits[1] if len(qubits) > 1 else q_idx
+            self._ops.append({
+                "type": "measure",
+                "name": "measure",
+                "qubit": q_idx,
+                "clbit": c_idx,
+                "condition": None,
+            })
+            return
         self._ops.append({
             "type": "gate",
-            "name": gate.lower(),
+            "name": g_name,
             "qubits": list(qubits),
             "params": list(params) if params else [],
             "condition": None,

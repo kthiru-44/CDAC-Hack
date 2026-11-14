@@ -5,6 +5,8 @@ Evaluates expressions containing numbers, pi, +, -, *, /, **, sin, cos, tan, exp
 
 import math
 import re
+from typing import Optional, Dict
+from qnvkit.qasm.diagnostics import QASMError
 
 SAFE_MATH_ENV = {
     "pi": math.pi,
@@ -20,30 +22,44 @@ SAFE_MATH_ENV = {
 _EXPR_CLEANER = re.compile(r"[^0-9a-zA-Z_\+\-\*\/\^\.\(\)\s,]")
 
 
-def evaluate_expression(expr_str: str) -> float:
+class ExprEvaluator:
+    """Evaluates mathematical AST / expressions with variables and constants."""
+    def __init__(self, variables: Optional[Dict[str, float]] = None):
+        self.env = dict(SAFE_MATH_ENV)
+        if variables:
+            self.env.update(variables)
+
+    def evaluate(self, expr_str: str) -> float:
+        s = expr_str.strip()
+        if not s:
+            return 0.0
+
+        try:
+            return float(s)
+        except ValueError:
+            pass
+
+        if _EXPR_CLEANER.search(s):
+            raise QASMError(f"Illegal characters in parameter expression: {expr_str}")
+
+        py_expr = s.replace("^", "**")
+        try:
+            val = eval(py_expr, {"__builtins__": None}, self.env)
+            return float(val)
+        except ZeroDivisionError:
+            raise QASMError(f"Division by zero in expression '{expr_str}'")
+        except (NameError, TypeError) as e:
+            raise QASMError(f"Undefined variable in expression '{expr_str}': {e}")
+        except Exception as e:
+            raise QASMError(f"Failed to evaluate expression '{expr_str}': {e}")
+
+
+
+def evaluate_expression(expr_str: str, variables: Optional[Dict[str, float]] = None) -> float:
     """
     Safely evaluates a mathematical parameter expression string to a float.
-    Replaces ^ with **.
+    Replaces ^ with **. Supports user variables and standard math functions.
     """
-    s = expr_str.strip()
-    if not s:
-        return 0.0
-    
-    # Quick numeric float parsing
-    try:
-        return float(s)
-    except ValueError:
-        pass
+    evaluator = ExprEvaluator(variables)
+    return evaluator.evaluate(expr_str)
 
-    # Clean and check
-    if _EXPR_CLEANER.search(s):
-        raise ValueError(f"Illegal characters in parameter expression: {expr_str}")
-
-    py_expr = s.replace("^", "**")
-    
-    # Evaluate in restricted namespace
-    try:
-        val = eval(py_expr, {"__builtins__": None}, SAFE_MATH_ENV)
-        return float(val)
-    except Exception as e:
-        raise ValueError(f"Failed to evaluate expression '{expr_str}': {e}")

@@ -109,8 +109,20 @@ src/qnvkit/
   - Negative tests: entangling circuits without entangling basis gates, continuous rotations in discrete basis.
   - Unit tests and Hypothesis property-based fuzzing passed (`tests/test_c1_decomposer.py`, `tests/test_c1_fuzz.py`).
   - Standalone demo: `examples/c1_demo.py`. User guide: `docs/c1-01-user-guide.md`.
-- [ ] **QC-C2-03 (Next):** OpenQASM 3.0 Transpiler to Qiskit, Cirq, and CUDA-Q.
-- [ ] **QC-03-03 (Next):** Safe rewrite-rule optimizer with causal DAG adjacency and barrier guards.
+- [x] **QC-C2-03 (COMPLETED):**
+  - Robust recursive-descent OpenQASM 3.0 / 2.0 parser with line:column diagnostic reporting in `src/qnvkit/qasm/parser3.py`.
+  - Full AST mathematical expression evaluator in `src/qnvkit/qasm/expr.py` supporting `pi`, trigonometric, and user constants.
+  - Features supported: register broadcasts (`h q;`), custom gate inlining with parameter/wire substitution, modifiers (`inv@`, `pow@`, `ctrl@`), unrolled `for`-loops over ranges, classical conditional execution, and both measurement styles.
+  - Target code generators in `src/qnvkit/transpile/`:
+    - `qiskit_gen.py`: Modern Qiskit $\ge 1.0.0$ code with `if_test` blocks and standalone runner.
+    - `cirq_gen.py`: Cirq $\ge 1.4.0$ code with `NamedQubit` mapping and `KeyCondition` controls.
+    - `cudaq_gen.py`: NVIDIA CUDA-Q $\ge 0.8.0$ `@cudaq.kernel` code with `.ctrl` modifiers.
+    - `qniverse_gen.py`: Standalone C-DAC QSDK code runnable locally or on PARAM / QACC clusters.
+  - Cross-framework equivalence verifier in `src/qnvkit/transpile/verify.py` with little-endian vs big-endian normalization.
+  - Dedicated problem workspace: `c2-03-qasm3-transpiler/` with `transpiler_cli.py`, `README.md`, sample QASM 3 files (`sample_bell.qasm`, `sample_ghz.qasm`, `sample_qpe.qasm`).
+  - Standalone demonstration: `examples/c2_demo.py`.
+  - Comprehensive unit and integration test suite passing 100% across all targets.
+- [ ] **QC-C3-03 (Next):** Safe rewrite-rule optimizer with causal DAG adjacency and barrier guards.
 
 ### Stage 3: Integration, Demonstration & Viva Defense
 - [ ] Full end-to-end test run across Python 3.9 and 3.12.

@@ -46,3 +46,32 @@ class Diagnostic:
             "line": self.location.line if self.location else None,
             "col": self.location.col if self.location else None,
         }
+
+
+class QASMError(ValueError):
+    """Exception raised for syntax or semantic errors in QASM source."""
+    def __init__(
+        self,
+        message: str,
+        line: Optional[int] = None,
+        col: Optional[int] = None,
+        source_text: Optional[str] = None
+    ):
+        super().__init__(message)
+        self.message = message
+        self.line = line
+        self.col = col
+        self.source_text = source_text
+
+    def __str__(self) -> str:
+        loc = f" at line {self.line}, col {self.col}" if self.line is not None else ""
+        msg = f"QASM Error{loc}: {self.message}"
+        if self.source_text and self.line is not None:
+            lines = self.source_text.splitlines()
+            if 0 < self.line <= len(lines):
+                line_content = lines[self.line - 1]
+                msg += f"\n  | {line_content}"
+                if self.col is not None and self.col > 0:
+                    msg += f"\n  | {' ' * (self.col - 1)}^"
+        return msg
+

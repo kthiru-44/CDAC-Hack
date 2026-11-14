@@ -4,7 +4,7 @@ qnvkit.qasm.lexer: Universal tokenizer for OpenQASM 2.0 and 3.0 with source loca
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Optional
+from typing import List, Optional, Any
 from qnvkit.qasm.diagnostics import SourceLocation, Diagnostic
 
 
@@ -14,6 +14,7 @@ class TokenType(Enum):
     STRING = auto()
     SEMICOLON = auto()
     COMMA = auto()
+    COLON = auto()       # :
     LPAREN = auto()
     RPAREN = auto()
     LBRACKET = auto()
@@ -37,6 +38,57 @@ class Token:
     type: TokenType
     value: str
     location: SourceLocation
+
+    def __init__(self, type_or_kind: Any, value: str, location_or_line: Any = 1, col: int = 1):
+        if isinstance(location_or_line, SourceLocation):
+            loc = location_or_line
+        else:
+            loc = SourceLocation(int(location_or_line), int(col))
+
+        if isinstance(type_or_kind, TokenType):
+            ttype = type_or_kind
+        else:
+            kind_map = {
+                "NUMBER": TokenType.NUMBER,
+                "STRING": TokenType.STRING,
+                "IDENT": TokenType.IDENTIFIER,
+                "KEYWORD": TokenType.IDENTIFIER,
+                "SYMBOL": TokenType.SEMICOLON,
+                "EOF": TokenType.EOF,
+            }
+            ttype = kind_map.get(type_or_kind, TokenType.IDENTIFIER)
+        object.__setattr__(self, "type", ttype)
+        object.__setattr__(self, "value", str(value))
+        object.__setattr__(self, "location", loc)
+
+    @property
+    def line(self) -> int:
+        return self.location.line
+
+    @property
+    def col(self) -> int:
+        return self.location.col
+
+    @property
+    def kind(self) -> str:
+        if self.type == TokenType.EOF:
+            return "EOF"
+        if self.type == TokenType.NUMBER:
+            return "NUMBER"
+        if self.type == TokenType.STRING:
+            return "STRING"
+        if self.type == TokenType.IDENTIFIER:
+            if self.value in {
+                "OPENQASM", "include", "qubit", "bit", "qreg", "creg", "gate",
+                "def", "barrier", "reset", "measure", "if", "else", "for", "in",
+                "return", "const", "inv", "pow", "ctrl", "negctrl",
+                "while", "extern", "delay", "cal", "defcal", "defcalgrammar", "input", "output", "let"
+            }:
+                return "KEYWORD"
+            return "IDENT"
+        return "SYMBOL"
+
+
 
 
 class QASMLexer:
@@ -116,6 +168,7 @@ class QASMLexer:
             simple_tokens = {
                 ";": TokenType.SEMICOLON,
                 ",": TokenType.COMMA,
+                ":": TokenType.COLON,
                 "(": TokenType.LPAREN,
                 ")": TokenType.RPAREN,
                 "[": TokenType.LBRACKET,

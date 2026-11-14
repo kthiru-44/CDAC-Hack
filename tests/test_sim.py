@@ -84,3 +84,15 @@ def test_total_variation_distance():
 
     assert total_variation_distance(dist1, dist2) == 0.0
     assert total_variation_distance(dist1, dist3) == 0.5
+
+
+def test_endianness_conversion():
+    from qnvkit.sim import convert_statevector_endianness
+    # State |01> (q0=0, q1=1 in Qiskit little-endian) -> index 2 in binary (q1, q0)
+    # Cirq represents (q0, q1) where index 1 is |01>
+    sv = np.array([0, 1, 0, 0], dtype=complex)  # index 1 (|01> in big-endian)
+    converted = convert_statevector_endianness(sv, 2)
+    # In little-endian, |01> corresponds to q0=0, q1=1 -> index 2
+    assert converted[2] == 1.0
+    assert converted[1] == 0.0
+

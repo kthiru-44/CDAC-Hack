@@ -117,14 +117,38 @@ class OptimizeResult:
         }
 
 
-@dataclass(frozen=True)
+from qnvkit.qasm.diagnostics import Diagnostic
+
+
+@dataclass
 class TranspilerReport:
     """Result of OpenQASM 3.0 transpilation (QC-C2-03)."""
     target: str
     target_version: str
-    status: str
-    warnings: Tuple[str, ...] = ()
-    unsupported_constructs: Tuple[Dict[str, Any], ...] = ()
+    status: str = "SUCCESS"  # "SUCCESS", "WARNING", "ERROR"
+    warnings: List[str] = field(default_factory=list)
+    unsupported_constructs: List[Dict[str, Any]] = field(default_factory=list)
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    qubit_mapping: Dict[str, Any] = field(default_factory=dict)
+    clbit_mapping: Dict[str, Any] = field(default_factory=dict)
+    equivalence_verified: Optional[bool] = None
+    fidelity: Optional[float] = None
+    execution_notes: Optional[str] = None
+
+    def add_warning(self, msg: str) -> None:
+        self.warnings.append(msg)
+        if self.status == "SUCCESS":
+            self.status = "WARNING"
+
+    def add_unsupported(self, construct: str, line: Optional[int] = None, col: Optional[int] = None) -> None:
+        self.unsupported_constructs.append({
+            "construct": construct,
+            "line": line,
+            "col": col,
+            "message": f"Unsupported construct: {construct}"
+        })
+        self.status = "ERROR"
+
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -133,4 +157,55 @@ class TranspilerReport:
             "status": self.status,
             "warnings": list(self.warnings),
             "unsupported_constructs": list(self.unsupported_constructs),
+            "metrics": self.metrics,
+            "qubit_mapping": self.qubit_mapping,
+            "clbit_mapping": self.clbit_mapping,
+            "equivalence_verified": self.equivalence_verified,
+            "fidelity": self.fidelity,
+            "execution_notes": self.execution_notes,
         }
+
+    def to_json(self, indent: int = 2) -> str:
+        import json
+        return json.dumps(self.to_dict(), indent=indent)
+
+
+
+TranspileReport = TranspilerReport
+
+
+@dataclass
+class TranspileResult:
+    """Target transpilation outcome with code and report."""
+    target: str
+    code: str
+    report: TranspilerReport
+
+    def __getitem__(self, key: str) -> Any:
+        if key == "code":
+            return self.code
+        elif key == "report":
+            return self.report
+        elif key == "target":
+            return self.target
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "target": self.target,
+            "code": self.code,
+            "report": self.report.to_dict()
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        import json
+        return json.dumps(self.to_dict(), indent=indent)
+
+
+

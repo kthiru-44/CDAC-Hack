@@ -10,26 +10,32 @@ from qnvkit.ir import CircuitIR, Op
 from qnvkit.gates import get_gate_info, _mat_u3
 
 
-def _apply_gate_to_state(state: np.ndarray, gate_mat: np.ndarray, target_qubits: Tuple[int, ...], n: int) -> np.ndarray:
+def _apply_gate_to_state(state: np.ndarray, gate_mat: np.ndarray, target_qubits: Tuple[int, ...], n: int, endianness: str = "little") -> np.ndarray:
     """
     Applies gate_mat to an n-qubit state tensor.
     state has shape (2, 2, ..., 2) with n axes.
     target_qubits is a tuple of qubit indices (0 = qubit 0).
+    endianness: "little" (Qiskit standard: q[0] is LSB / last axis) or "big" (Cirq standard: q[0] is MSB / first axis).
     """
     k = len(target_qubits)
-    # Reshape gate_mat to (2,)*k + (2,)*k
+    if endianness == "little":
+        axes = [n - 1 - q for q in target_qubits]
+    else:
+        axes = list(target_qubits)
+
     gate_tensor = gate_mat.reshape((2,) * (2 * k))
-    
-    # Contract gate input indices with state axes
     input_axes = list(range(k, 2 * k))
-    state_axes = list(target_qubits)
-    contracted = np.tensordot(gate_tensor, state, axes=(input_axes, state_axes))
-    
-    # Map axes back to correct positions
-    non_target = [q for q in range(n) if q not in target_qubits]
-    perm = [target_qubits.index(q) if q in target_qubits else k + non_target.index(q) for q in range(n)]
-    
+    contracted = np.tensordot(gate_tensor, state, axes=(input_axes, axes))
+
+    remaining_axes = [i for i in range(n) if i not in axes]
+    perm = [0] * n
+    for out_idx, orig_axis in enumerate(axes):
+        perm[orig_axis] = out_idx
+    for rem_idx, orig_axis in enumerate(remaining_axes):
+        perm[orig_axis] = k + rem_idx
+
     return np.transpose(contracted, perm)
+
 
 
 def _get_op_matrix(op: Op) -> np.ndarray:
@@ -96,33 +102,32 @@ def _get_op_matrix(op: Op) -> np.ndarray:
     raise NotImplementedError(f"Matrix not implemented for gate '{name}'.")
 
 
-def compute_unitary(ir: CircuitIR) -> np.ndarray:
+def compute_unitary(ir: CircuitIR, endianness: str = "little") -> np.ndarray:
     """
     Computes the full 2^n x 2^n unitary matrix for the circuit.
     Non-unitary gates (barrier, measure, reset) are bypassed or identity.
     """
     n = ir.num_qubits
     dim = 1 << n
-    # Form unitary by applying circuit to each standard basis state
     unitary = np.zeros((dim, dim), dtype=complex)
-    
+
     for basis_idx in range(dim):
         state = np.zeros(dim, dtype=complex)
         state[basis_idx] = 1.0
         state = state.reshape((2,) * n)
-        
+
         for op in ir.ops:
             if op.name in ("barrier", "measure", "reset"):
                 continue
             mat = _get_op_matrix(op)
-            state = _apply_gate_to_state(state, mat, op.qubits, n)
-            
+            state = _apply_gate_to_state(state, mat, op.qubits, n, endianness=endianness)
+
         unitary[:, basis_idx] = state.flatten()
-        
+
     return unitary
 
 
-def compute_statevector(ir: CircuitIR) -> np.ndarray:
+def compute_statevector(ir: CircuitIR, endianness: str = "little") -> np.ndarray:
     """
     Computes final statevector starting from |0...0>.
     """
@@ -131,14 +136,15 @@ def compute_statevector(ir: CircuitIR) -> np.ndarray:
     state = np.zeros(dim, dtype=complex)
     state[0] = 1.0
     state = state.reshape((2,) * n)
-    
+
     for op in ir.ops:
         if op.name in ("barrier", "measure", "reset"):
             continue
         mat = _get_op_matrix(op)
-        state = _apply_gate_to_state(state, mat, op.qubits, n)
-        
+        state = _apply_gate_to_state(state, mat, op.qubits, n, endianness=endianness)
+
     return state.flatten()
+
 
 
 def check_unitary_equivalence(ir_a: CircuitIR, ir_b: CircuitIR, tol: float = 1e-5) -> bool:
@@ -182,3 +188,17 @@ def total_variation_distance(dist_a: Dict[str, float], dist_b: Dict[str, float])
     all_keys = set(dist_a.keys()).union(dist_b.keys())
     tvd = 0.5 * sum(abs(dist_a.get(k, 0.0) - dist_b.get(k, 0.0)) for k in all_keys)
     return float(tvd)
+
+
+def convert_statevector_endianness(statevector: np.ndarray, num_qubits: int) -> np.ndarray:
+    """
+    Converts between little-endian (Qiskit/QSDK: qubit 0 is LSB) and big-endian (Cirq: qubit 0 is MSB).
+    Permutes tensor axes from (q0, q1, ..., q_{n-1}) to (q_{n-1}, ..., q0).
+    """
+    if num_qubits <= 1:
+        return statevector.copy()
+    tensor = statevector.reshape((2,) * num_qubits)
+    reversed_axes = list(reversed(range(num_qubits)))
+    converted = np.transpose(tensor, reversed_axes)
+    return converted.flatten()
+

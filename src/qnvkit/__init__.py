@@ -10,6 +10,7 @@ from qnvkit.ir import Op, Register, CircuitIR
 from qnvkit.report import ProfileReport, DecomposeResult, UnsupportedReport, OptimizeResult, TranspilerReport
 from qnvkit.metrics import profile
 from qnvkit.decompose.decomposer import decompose
+from qnvkit.transpile.api import transpile
 
 __all__ = [
     "Op",
@@ -22,4 +23,6 @@ __all__ = [
     "TranspilerReport",
     "profile",
     "decompose",
+    "transpile",
 ]
+

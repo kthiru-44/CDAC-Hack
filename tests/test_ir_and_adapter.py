@@ -82,3 +82,24 @@ if(c==1) x q[0];
     assert len(ir.ops) == 1
     assert ir.ops[0].condition == ("c", 1)
     assert ir.ops[0].name == "x"
+
+
+def test_circuit_ir_flat_index_helpers():
+    ir = CircuitIR(
+        num_qubits=5,
+        num_clbits=3,
+        qregs=(Register("q", 3), Register("anc", 2)),
+        cregs=(Register("c", 3, is_classical=True),),
+        ops=(Op("h", (0,)),)
+    )
+    assert ir.num_qubits == 5
+    assert ir.num_clbits == 3
+
+    assert ir.qubit_to_flat_index(("q", 0)) == 0
+    assert ir.qubit_to_flat_index(("q", 2)) == 2
+    assert ir.qubit_to_flat_index(("anc", 0)) == 3
+    assert ir.qubit_to_flat_index(("anc", 1)) == 4
+
+    assert ir.flat_index_to_qubit(3) == ("anc", 0)
+    assert ir.flat_index_to_qubit(0) == ("q", 0)
+

@@ -45,3 +45,29 @@ def test_rotations_at_zero():
     for name in ["rx", "ry", "rz"]:
         mat = get_gate_matrix(name, (0.0,))
         assert np.allclose(np.abs(mat), np.eye(2), atol=1e-7)
+
+
+def test_unitarity_of_gates():
+    """Verify unitarity U @ U.dag = I across all unitary gates."""
+    for name, gdef in GATE_REGISTRY.items():
+        if not gdef.is_unitary or gdef.matrix_fn is None or gdef.arity > 3:
+            continue
+        params = tuple([0.456, 1.234, 2.345, 0.789][:gdef.num_params])
+        mat = gdef.matrix_fn(params)
+        ident = np.eye(mat.shape[0], dtype=complex)
+        prod = mat @ np.conjugate(mat.T)
+        np.testing.assert_allclose(prod, ident, atol=1e-10, err_msg=f"Gate {name} is not unitary")
+
+
+def test_extra_rotations():
+    rx_2pi = get_gate_matrix("rx", (2 * np.pi,))
+    np.testing.assert_allclose(rx_2pi, -np.eye(2), atol=1e-10)
+
+    rz_2pi = get_gate_matrix("rz", (2 * np.pi,))
+    np.testing.assert_allclose(rz_2pi, -np.eye(2), atol=1e-10)
+
+    h = get_gate_matrix("h")
+    x = get_gate_matrix("x")
+    z = get_gate_matrix("z")
+    np.testing.assert_allclose(h, (x + z) / np.sqrt(2), atol=1e-10)
+
