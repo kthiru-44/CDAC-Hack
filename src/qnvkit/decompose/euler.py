@@ -48,6 +48,14 @@ def euler_zyz_decompose(U: np.ndarray) -> Tuple[float, float, float]:
     return _norm(beta), _norm(gamma), _norm(delta)
 
 
+def _z_rotation_gate(basis: Set[str]) -> Optional[str]:
+    """Gate available for a Z-axis rotation. p(a) and u1(a) equal rz(a) up to a global phase."""
+    for g in ("rz", "p", "u1"):
+        if g in basis:
+            return g
+    return None
+
+
 def synthesize_1q_unitary(
     matrix: np.ndarray,
     qubit: int,
@@ -55,64 +63,55 @@ def synthesize_1q_unitary(
     condition: Optional[Tuple[str, int]] = None
 ) -> Optional[List[Op]]:
     """
-    Synthesizes a 1-qubit unitary matrix into operations using only the gates in basis.
-    Returns None if the basis lacks suitable 1-qubit generators.
+    Synthesizes a 1-qubit unitary (up to global phase) using only gates in `basis`.
+    The returned list is in circuit (time) order. An identity yields an empty list.
+    Returns None if the basis has no continuous 1-qubit rotations that can express it.
+
+    U = Rz(beta) Ry(gamma) Rz(delta)  (matrix product) -> circuit order: Z(delta), Y(gamma), Z(beta)
     """
     beta, gamma, delta = euler_zyz_decompose(matrix)
-    ops: List[Op] = []
+    eps = 1e-9
+    if abs(gamma) < eps:
+        # Pure Z rotation: merge both Z angles into one.
+        delta = (beta + delta + np.pi) % (2.0 * np.pi) - np.pi
+        beta = 0.0
 
-    # Priority 1: U3 gate directly
+    def op(name, *params):
+        return Op(name, (qubit,), params=tuple(float(p) for p in params), condition=condition)
+
+    is_identity = abs(gamma) < eps and abs(delta) < eps
+    if is_identity:
+        return []
+
     if "u3" in basis:
-        ops.append(Op("u3", (qubit,), params=(gamma, beta, delta), condition=condition))
-        return ops
+        return [op("u3", gamma, beta, delta)]
 
-    # Priority 2: {rz, ry}
-    if "rz" in basis and "ry" in basis:
-        if abs(delta) > 1e-7:
-            ops.append(Op("rz", (qubit,), params=(delta,), condition=condition))
-        if abs(gamma) > 1e-7:
-            ops.append(Op("ry", (qubit,), params=(gamma,), condition=condition))
-        if abs(beta) > 1e-7:
-            ops.append(Op("rz", (qubit,), params=(beta,), condition=condition))
-        if not ops:
-            # Identity
-            if "id" in basis:
-                ops.append(Op("id", (qubit,), condition=condition))
-            elif "rz" in basis:
-                ops.append(Op("rz", (qubit,), params=(0.0,), condition=condition))
-        return ops
+    zg = _z_rotation_gate(basis)
 
-    # Priority 3: {rx, rz} -> Ry(gamma) = Rz(pi/2) Rx(gamma) Rz(-pi/2)
-    if "rx" in basis and "rz" in basis:
-        if abs(delta) > 1e-7:
-            ops.append(Op("rz", (qubit,), params=(delta,), condition=condition))
-        if abs(gamma) > 1e-7:
-            ops.append(Op("rz", (qubit,), params=(np.pi / 2,), condition=condition))
-            ops.append(Op("rx", (qubit,), params=(gamma,), condition=condition))
-            ops.append(Op("rz", (qubit,), params=(-np.pi / 2,), condition=condition))
-        if abs(beta) > 1e-7:
-            ops.append(Op("rz", (qubit,), params=(beta,), condition=condition))
-        if not ops:
-            ops.append(Op("rz", (qubit,), params=(0.0,), condition=condition))
-        return ops
+    def z_rot(angle) -> Optional[List[Op]]:
+        if abs(angle) < eps:
+            return []
+        if zg:
+            return [op(zg, angle)]
+        if "rx" in basis and "ry" in basis:
+            # Rz(a) = Rx(pi/2) Ry(a) Rx(-pi/2) as a matrix product -> time order: Rx(-pi/2), Ry(a), Rx(pi/2)
+            return [op("rx", -np.pi / 2), op("ry", angle), op("rx", np.pi / 2)]
+        return None
 
-    # Priority 4: {rx, ry} -> Rz(theta) = Rx(pi/2) Ry(theta) Rx(-pi/2)
-    if "rx" in basis and "ry" in basis:
-        def _add_rz(angle):
-            if abs(angle) > 1e-7:
-                ops.append(Op("rx", (qubit,), params=(np.pi / 2,), condition=condition))
-                ops.append(Op("ry", (qubit,), params=(angle,), condition=condition))
-                ops.append(Op("rx", (qubit,), params=(-np.pi / 2,), condition=condition))
+    def y_rot(angle) -> Optional[List[Op]]:
+        if abs(angle) < eps:
+            return []
+        if "ry" in basis:
+            return [op("ry", angle)]
+        if "rx" in basis and zg:
+            # Ry(a) = Rz(pi/2) Rx(a) Rz(-pi/2) as a matrix product -> time order: Rz(-pi/2), Rx(a), Rz(pi/2)
+            return [op(zg, -np.pi / 2), op("rx", angle), op(zg, np.pi / 2)]
+        return None
 
-        _add_rz(delta)
-        if abs(gamma) > 1e-7:
-            ops.append(Op("ry", (qubit,), params=(gamma,), condition=condition))
-        _add_rz(beta)
-        if not ops:
-            ops.append(Op("rx", (qubit,), params=(0.0,), condition=condition))
-        return ops
-
-    return None
+    parts = [z_rot(delta), y_rot(gamma), z_rot(beta)]
+    if any(part is None for part in parts):
+        return None
+    return [o for part in parts for o in part]
 
 
 def decompose_discrete_1q_gate(
@@ -120,30 +119,40 @@ def decompose_discrete_1q_gate(
     basis: Set[str]
 ) -> Optional[List[Op]]:
     """
-    Decomposes standard discrete Clifford+T gates into a discrete basis (e.g. {h, t, tdg, s, cx}).
-    Returns None if gate cannot be exactly represented in the discrete basis.
+    Exact rewrites of the fixed 1-qubit gates into simpler fixed gates (for discrete bases such
+    as {h, t, cx}). Each rule is exact up to a global phase. The caller expands the result
+    further; returns None when no rule exists.
     """
     name = op.name
     q = op.qubits[0]
     cond = op.condition
 
-    if name in basis:
-        return [op]
+    def g(n):
+        return Op(n, (q,), condition=cond)
 
+    if name == "id":
+        return []
+    if name in ("p", "u1", "rz") and op.params:
+        # A Z rotation by a multiple of pi/4 is exactly a power of T (rz differs only by a global phase).
+        k = op.params[0] / (np.pi / 4.0)
+        if abs(k - round(k)) < 1e-9:
+            words = {0: [], 1: ["t"], 2: ["s"], 3: ["s", "t"], 4: ["z"], 5: ["z", "t"], 6: ["sdg"], 7: ["tdg"]}
+            return [g(n) for n in words[int(round(k)) % 8]]
+        return None
     if name == "x":
-        if "h" in basis and "z" in basis:
-            return [Op("h", (q,), condition=cond), Op("z", (q,), condition=cond), Op("h", (q,), condition=cond)]
-    elif name == "y":
-        if "s" in basis and "sdg" in basis and "x" in basis:
-            return [Op("s", (q,), condition=cond), Op("x", (q,), condition=cond), Op("sdg", (q,), condition=cond)]
-    elif name == "z":
-        if "s" in basis:
-            return [Op("s", (q,), condition=cond), Op("s", (q,), condition=cond)]
-    elif name == "s":
-        if "t" in basis:
-            return [Op("t", (q,), condition=cond), Op("t", (q,), condition=cond)]
-    elif name == "sdg":
+        return [g("h"), g("z"), g("h")]
+    if name == "y":
+        return [g("z"), g("x")]            # Y = i X Z
+    if name == "z":
+        return [g("s"), g("s")]
+    if name == "s":
+        return [g("t"), g("t")]
+    if name == "sdg":
         if "tdg" in basis:
-            return [Op("tdg", (q,), condition=cond), Op("tdg", (q,), condition=cond)]
-
+            return [g("tdg"), g("tdg")]
+        return [g("s"), g("s"), g("s")]    # S^3 = Sdg
+    if name == "tdg":
+        if "sdg" in basis:
+            return [g("sdg"), g("t")]      # Sdg T = Tdg
+        return [g("t")] * 7                # T^7 = Tdg
     return None

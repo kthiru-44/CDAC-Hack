@@ -15,6 +15,7 @@ def calculate_scheduled_depth(ir: CircuitIR) -> int:
     - Each unitary operation occupies 1 layer on all operand qubits simultaneously.
     - Measure and reset take 1 layer on their touched qubits and classical bits.
     - Barrier takes 0 layers but aligns (synchronizes) all touched qubits to max(current_layer).
+    - A classically conditioned gate also waits for every bit of its condition register.
     - Operations on disjoint qubits execute in parallel on the earliest available layer.
     """
     if ir.num_qubits == 0:
@@ -22,6 +23,12 @@ def calculate_scheduled_depth(ir: CircuitIR) -> int:
 
     qubit_layers = [0] * ir.num_qubits
     clbit_layers = [0] * ir.num_clbits if ir.num_clbits > 0 else []
+
+    creg_bits = {}
+    offset = 0
+    for reg in ir.cregs:
+        creg_bits[reg.name] = range(offset, offset + reg.size)
+        offset += reg.size
 
     for op in ir.ops:
         if op.name == "barrier":
@@ -49,7 +56,10 @@ def calculate_scheduled_depth(ir: CircuitIR) -> int:
                 qubit_layers[q] = next_l
         else:
             # Unitary gate
-            start = max(qubit_layers[q] for q in op.qubits) if op.qubits else 0
+            req = [qubit_layers[q] for q in op.qubits]
+            if op.condition and clbit_layers:
+                req.extend(clbit_layers[c] for c in creg_bits.get(op.condition[0], ()))
+            start = max(req) if req else 0
             next_l = start + 1
             for q in op.qubits:
                 qubit_layers[q] = next_l
@@ -78,7 +88,8 @@ def profile(circuit: Union[Any, CircuitIR]) -> ProfileReport:
     barriers = counts.get("barrier", 0)
 
     for op in ir.ops:
-        active_qubits.update(op.qubits)
+        if op.name != "barrier":  # a barrier is not an operation on the qubit
+            active_qubits.update(op.qubits)
         if op.name in ("barrier", "measure", "reset"):
             continue
         arity = len(op.qubits)

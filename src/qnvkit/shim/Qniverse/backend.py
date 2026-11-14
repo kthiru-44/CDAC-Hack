@@ -1,8 +1,19 @@
-"""
-qnvkit.shim.Qniverse.backend: Mock Backend builder pattern.
-"""
+"""Local stand-in for ``Qniverse.backend`` (used only when the real QSDK is not installed)."""
 
-from typing import List
+_SIMS = {
+    ("CPU", "QACC_Cluster"): [
+        "aer_simulator_density_matrix", "aer_simulator_statevector", "cirq_simulator",
+        "qasm_simulator", "qsimcirq_simulator", "quest_simulator", "qulacs_multicpu_simulator",
+    ],
+    ("GPU", "QACC_Cluster"): [
+        "aer_simulator_statevector_gpu", "nvidia_cudaq_statevector_simulator",
+        "qsimcirq_cuquantum_gpu_simulator",
+    ],
+    ("CPU", "Param_Utkarsh"): [
+        "aer_simulator_density_matrix", "aer_simulator_statevector", "cirq_simulator", "qasm_simulator",
+    ],
+    ("GPU", "Param_Utkarsh"): ["aer_simulator_statevector_gpu"],
+}
 
 
 class Backend:
@@ -11,36 +22,33 @@ class Backend:
         self._hpc = None
         self._simulator = None
 
-    def processor(self, name: str) -> 'Backend':
+    def processor(self, name):
+        if name not in ("CPU", "GPU"):
+            raise ValueError("Unknown processor '%s'." % name)
         self._processor = name
-        return self
 
-    def hpc(self, name: str) -> 'Backend':
+    def hpc(self, name):
         if not self._processor:
             raise ValueError("Processor must be set before HPC.")
+        if (self._processor, name) not in _SIMS:
+            raise ValueError("HPC '%s' is not valid for processor '%s'." % (name, self._processor))
         self._hpc = name
-        return self
 
-    def simulator(self, name: str) -> 'Backend':
-        if not self._hpc:
-            raise ValueError("HPC must be set before Simulator.")
+    def simulator(self, name):
+        if not self._processor or not self._hpc:
+            raise ValueError("Processor and HPC must be set before setting Simulator.")
+        if name not in _SIMS[(self._processor, self._hpc)]:
+            raise ValueError("Simulator '%s' is not available on %s/%s." % (name, self._processor, self._hpc))
         self._simulator = name
-        return self
 
     @staticmethod
-    def get_processor() -> List[str]:
-        return ["CPU", "GPU", "FPGA", "QPU"]
+    def get_processor():
+        return ["CPU", "GPU"]
 
     @staticmethod
-    def get_hpc(processor: str) -> List[str]:
-        if processor == "CPU":
-            return ["QACC_Cluster"]
-        elif processor == "GPU":
-            return ["Param_Utkarsh"]
-        return ["QACC_Cluster"]
+    def get_hpc(processor):
+        return [h for (p, h) in _SIMS if p == processor]
 
     @staticmethod
-    def get_simulator(processor: str, hpc: str) -> List[str]:
-        if processor == "CPU":
-            return ["qasm_simulator", "aer_simulator_statevector", "cirq_simulator", "quest_simulator"]
-        return ["nvidia_cudaq_statevector_simulator"]
+    def get_simulator(processor, hpc):
+        return list(_SIMS.get((processor, hpc), []))

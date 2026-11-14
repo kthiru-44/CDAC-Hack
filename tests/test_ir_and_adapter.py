@@ -6,7 +6,8 @@ import pytest
 from qnvkit.ir import Register, Op, CircuitIR
 from qnvkit.qasm.parser2 import parse_qasm2
 from qnvkit.qsdk_adapter import from_qniverse, to_qniverse
-from qnvkit.shim.Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
+from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
+from Qniverse.gates import h, cx, rx
 
 
 def test_register_and_op_immutability():
@@ -51,11 +52,12 @@ measure q[1] -> c[1];
 
 def test_qsdk_adapter_roundtrip():
     qc = QniverseCircuit()
-    qc.add_register(QuantumRegister(2, 'q'))
+    q = QuantumRegister(2, 'q')
+    qc.add_register(q)
     qc.add_register(ClassicalRegister(2, 'c'))
-    qc.add_gate("h", 0)
-    qc.add_gate("cx", 0, 1)
-    qc.add_gate("rx", 1, params=[1.570796])
+    qc.add_gate(h, q[0])
+    qc.add_gate(cx, q[0], q[1])
+    qc.add_gate(rx(1.570796), q[1])
     qc.measure_all()
 
     # Convert to IR

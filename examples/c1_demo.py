@@ -1,127 +1,119 @@
 #!/usr/bin/env python3
 """
-QC-C1-01 Demonstration Script: Circuit Profiling and Limited Basis-Gate Decomposition
-PESU - C-DAC Quantum Hackathon
+QC-C1-01 demo: circuit profiling and limited basis-gate decomposition.
 
-Usage:
-  python examples/c1_demo.py
-  python examples/c1_demo.py --live   # (Optional: dispatches 1 sample job to Qniverse cloud)
+    python examples/c1_demo.py            # no jobs submitted
+    python examples/c1_demo.py --live     # also submits ONE job through the QSDK job API
+
+Circuits are built with the documented QSDK calls. Inside Qniverse JupyterLab the official
+`Qniverse` package is used; elsewhere a local stand-in with the same calls is used, and the
+script says which one is active.
 """
 
-import sys
 import argparse
-from pathlib import Path
+import os
+import sys
 
-# Ensure src/ is on sys.path
-SRC_DIR = Path(__file__).resolve().parent.parent / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
-from qnvkit.ir import CircuitIR, Register, Op
-from qnvkit.metrics import profile
-from qnvkit.decompose.decomposer import decompose
-from qnvkit.qsdk_adapter import from_qniverse, to_qniverse
-from qnvkit.shim.Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
+import qnvkit.qsdk_adapter as adapter  # noqa: E402  (must come before `import Qniverse`)
+from qnvkit.metrics import profile  # noqa: E402
+from qnvkit.decompose.decomposer import decompose  # noqa: E402
+from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister  # noqa: E402
+from Qniverse.gates import h, s, t, cx, cz, swap, ccx, crz, barrier, measure  # noqa: E402
 
 
-def create_sample_quantum_circuit() -> QniverseCircuit:
-    """Builds a benchmark 3-qubit quantum circuit containing single, two, and multi-qubit gates."""
+def build_sample_circuit():
     qc = QniverseCircuit()
-    qc.add_register(QuantumRegister(3, 'q'))
-    qc.add_register(ClassicalRegister(3, 'c'))
+    q = QuantumRegister(3, "q")
+    c = ClassicalRegister(3, "c")
+    qc.add_register(q)
+    qc.add_register(c)
 
-    # Superposition and phase
-    qc.add_gate("h", 0)
-    qc.add_gate("s", 1)
-    qc.add_gate("t", 2)
-
-    # Entanglement
-    qc.add_gate("cx", 0, 1)
-    qc.add_gate("cz", 1, 2)
-    qc.add_gate("swap", 0, 2)
-
-    # Multi-qubit Toffoli
-    qc.add_gate("ccx", 0, 1, 2)
-
-    # Barriers and measurement
-    qc.add_gate("barrier", 0, 1, 2)
-    qc.add_gate("measure", 0, 0)
-    qc.add_gate("measure", 1, 1)
-    qc.add_gate("measure", 2, 2)
-
+    qc.add_gate(h, q[0])
+    qc.add_gate(s, q[1])
+    qc.add_gate(t, q[2])
+    qc.add_gate(cx, q[0], q[1])
+    qc.add_gate(cz, q[1], q[2])
+    qc.add_gate(swap, q[0], q[2])
+    qc.add_gate(crz(0.7), q[0], q[1])
+    qc.add_gate(ccx, q[0], q[1], q[2])
+    for i in range(3):
+        qc.add_gate(barrier, q[i])
+    for i in range(3):
+        qc.add_gate(measure, q[i], c[i])
     return qc
 
 
+def section(title):
+    print("\n" + "=" * 78 + "\n" + title + "\n" + "=" * 78)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="QC-C1-01 Circuit Profiling & Decomposition Demo")
-    parser.add_argument("--live", action="store_true", help="Submit decomposed circuit to Qniverse cloud")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--live", action="store_true", help="submit one job through the QSDK job API")
     args = parser.parse_args()
 
-    print("================================================================================")
-    print("      PESU – C-DAC QUANTUM HACKATHON: QC-C1-01 VERIFICATION DEMO")
-    print("      Module: Circuit Profiling & Limited Basis-Gate Decomposition")
-    print("================================================================================\n")
+    print("QC-C1-01: Circuit Profiling and Limited Basis-Gate Decomposition")
+    print("QSDK in use:", adapter.qsdk_description())
 
-    # 1. Create and Profile Sample Circuit
-    qc = create_sample_quantum_circuit()
-    print("1. PROFILING INPUT QUANTUM CIRCUIT:")
-    initial_profile = profile(qc)
-    print(initial_profile.summary())
-    print("\nOriginal OpenQASM 2.0 Export:")
-    print("-----------------------------")
-    print(qc.qasm().strip())
-    print("-----------------------------\n")
+    qc = build_sample_circuit()
+    original_qasm = adapter.read_qasm(qc)
 
-    # 2. Decompose into C-DAC Native Basis: {rx, ry, rz, cx}
-    print("2. DECOMPOSING INTO NATIVE QNIVERSE BASIS: {rx, ry, rz, cx}")
-    basis_native = {"rx", "ry", "rz", "cx"}
-    res_native = decompose(qc, basis_native)
-    print(res_native.summary())
-    print("Decomposed QASM Sample (first 10 lines):")
-    decomposed_qasm = res_native.circuit.qasm().splitlines()
-    for line in decomposed_qasm[:12]:
-        print(f"  {line}")
-    if len(decomposed_qasm) > 12:
-        print(f"  ... ({len(decomposed_qasm) - 12} more lines)")
+    section("1. Input circuit (qc.qasm()) and its profile")
+    print(original_qasm.strip())
     print()
+    print(profile(qc).summary())
 
-    # 3. Decompose into Universal U3 Basis: {u3, cx}
-    print("3. DECOMPOSING INTO UNIVERSAL BASIS: {u3, cx}")
-    basis_u3 = {"u3", "cx"}
-    res_u3 = decompose(qc, basis_u3)
-    print(f"  Status: {'SUCCESS' if res_u3.circuit else 'FAILED'}")
-    print(f"  Equivalence Verified: {res_u3.verified}")
-    print(f"  Gate Count: {res_u3.before.total_gates} -> {res_u3.after.total_gates}")
-    print(f"  Scheduled Depth: {res_u3.before.depth} -> {res_u3.after.depth}")
-    print(f"  Gate Breakdown: {res_u3.after.gate_counts}\n")
+    section("2. Decompose into basis {rx, ry, rz, cx}")
+    res = decompose(qc, {"rx", "ry", "rz", "cx"})
+    print(res.summary())
+    print("Decomposed circuit (new QniverseCircuit), first lines:")
+    lines = adapter.read_qasm(res.circuit).splitlines()
+    for line in lines[:14]:
+        print("  " + line)
+    print("  ... (%d more lines)" % max(0, len(lines) - 14))
 
-    # 4. Demonstrate Negative Test: Unsupported Basis Decomposition
-    print("4. NEGATIVE TEST: UNSUPPORTED OPERATION REPORTING")
-    print("Attempting to decompose an entangling circuit into a 1-qubit-only basis: {rx, ry, rz}")
-    basis_unsupported = {"rx", "ry", "rz"}
-    res_unsupported = decompose(qc, basis_unsupported)
-    print(f"  Circuit emitted: {res_unsupported.circuit} (Strictly None to prevent silent invalid emission)")
-    print(f"  Unsupported Report Present: {res_unsupported.unsupported is not None}")
-    if res_unsupported.unsupported:
-        print(res_unsupported.unsupported.summary())
-    print()
+    section("3. Other bases on the same circuit")
+    for basis in ({"u3", "cx"}, {"rz", "ry", "cz"}, {"rx", "rz", "cx"}, {"p", "ry", "cx"}):
+        r = decompose(qc, basis)
+        if r.circuit is None:
+            print("%-22s -> unsupported" % sorted(basis))
+            continue
+        print("%-26s gates %2d -> %3d | depth %2d -> %3d | verified=%s | %s" % (
+            sorted(basis), r.before.total_gates, r.after.total_gates,
+            r.before.depth, r.after.depth, r.verified, r.after.gate_counts))
 
-    # 5. Live Qniverse Cloud Dispatch (Optional)
+    section("4. Unsupported cases: explicit report, no circuit emitted")
+    for basis, why in (
+        ({"rx", "ry", "rz"}, "no entangling gate in the basis"),
+        ({"h", "t", "cx"}, "discrete basis cannot express crz(0.7) exactly"),
+    ):
+        r = decompose(qc, basis)
+        print("Basis %s (%s)" % (sorted(basis), why))
+        print("  circuit returned:", r.circuit)
+        print("  " + r.unsupported.summary().replace("\n", "\n  "))
+    for bad_basis in (set(), {"cx", "sx"}):
+        try:
+            decompose(qc, bad_basis)
+        except ValueError as e:
+            print("Basis %s rejected: %s" % (sorted(bad_basis), str(e)[:110]))
+
+    section("5. Input circuit unchanged")
+    print("qc.qasm() identical before and after all calls:", adapter.read_qasm(qc) == original_qasm)
+
     if args.live:
-        print("5. DISPATCHING TO C-DAC QNIVERSE CLOUD (Credit Guard Active):")
+        section("6. Run original and decomposed circuits through the QSDK job API")
         from qnvkit.runner import QniverseRunner
         runner = QniverseRunner(max_jobs_quota=2)
-        try:
-            balance = runner.get_balance()
-            print(f"  Current Credit Balance: {balance} credits")
-            print("  Submitting decomposed circuit to CPU qasm_simulator on QACC_Cluster...")
-            res = runner.execute_circuit(res_native.circuit, processor="CPU", hpc="QACC_Cluster", simulator="qasm_simulator")
-            print(f"  Job Success! Job ID: {res['job_id']}")
-            print(f"  Execution Counts: {res['result'].get('counts')}")
-        except Exception as e:
-            print(f"  Cloud dispatch note: {e}")
-
-    print("\nQC-C1-01 Demonstration Completed Successfully.")
+        if runner.is_live and not runner.token:
+            print("Set QNIVERSE_API_KEY (or define `token`) first; no job submitted.")
+            return
+        print("Credit balance:", runner.get_balance())
+        for label, circ in (("original", qc), ("decomposed", res.circuit)):
+            out = runner.execute_circuit(circ, "CPU", "QACC_Cluster", "qasm_simulator", shots=1024,
+                                         job_name="c1_demo_" + label)
+            print("%-10s executed on: %s | result: %s" % (label, out["executed_on"], out["result"]))
 
 
 if __name__ == "__main__":

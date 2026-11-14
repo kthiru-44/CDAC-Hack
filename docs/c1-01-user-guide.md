@@ -54,8 +54,9 @@ Where:
 Depending on the chosen basis:
 - **`{u3}`:** Emits a single $U_3(\gamma, \beta, \delta)$ gate.
 - **`{rx, ry, rz}`:** Emits $R_z(\delta) \cdot R_y(\gamma) \cdot R_z(\beta)$.
-- **`{rx, rz}`:** Decomposes $R_y(\gamma) = R_z(\pi/2) \cdot R_x(\gamma) \cdot R_z(-\pi/2)$.
-- **`{rx, ry}`:** Decomposes $R_z(\theta) = R_x(\pi/2) \cdot R_y(\theta) \cdot R_x(-\pi/2)$.
+- **`{rx, rz}`:** $R_y(\gamma) = R_z(\pi/2) \cdot R_x(\gamma) \cdot R_z(-\pi/2)$ (matrix product; applied right to left).
+- **`{rx, ry}`:** $R_z(\theta) = R_x(\pi/2) \cdot R_y(\theta) \cdot R_x(-\pi/2)$ (matrix product; applied right to left).
+- **`p` or `u1` instead of `rz`:** used as the Z rotation (equal up to global phase).
 
 ### 3.2 Two-Qubit and Multi-Qubit Decompositions
 - **Toffoli (`ccx`):** Decomposed into 6 $CX$ gates and 9 Clifford+T gates ($H, T, T^\dagger$).
@@ -64,50 +65,58 @@ Depending on the chosen basis:
 - **$CZ$:** Decomposed into $H(t) \to CX(c, t) \to H(t)$.
 - **$CY$:** Decomposed into $S^\dagger(t) \to CX(c, t) \to S(t)$.
 - **Controlled Rotations ($CR_z, CR_x, CR_y$):** Decomposed into 2 $CX$ gates and single-qubit rotations.
+- **$CU_3$, $CU_2$:** ABC construction (Nielsen & Chuang, Cor. 4.2): 2 $CX$ plus rotations.
+- **$C^3X$, $C^4X$, $C^5X$:** $H \cdot C^nZ \cdot H$ with an exact ancilla-free multi-controlled phase (Barenco et al. 1995, Lemma 7.5).
 
 ---
 
 ## 4. Run Instructions
 
-### 4.1 Running the Demo Script
+### 4.1 In Qniverse JupyterLab (official QSDK)
+1. Upload or `git clone` the repository so that `src/qnvkit/` is present.
+2. Open `notebooks/c1_demo.ipynb` and run all cells. The first cell prints which QSDK is in use.
+3. For the live run (section 6 of the notebook), paste your Qniverse API key into `token`.
+
+### 4.2 Locally (stand-in for the QSDK, no credits used)
+The official `Qniverse` package is not on PyPI, so local runs use a stand-in that implements the same documented calls. The script prints which one is active.
 ```bash
-# Run with Python 3.9 in the virtual environment
-.venv39/bin/python examples/c1_demo.py
+uv venv --python 3.9 .venv39 && uv pip install --python .venv39/bin/python numpy pytest hypothesis
+.venv39/bin/python examples/c1_demo.py          # add --live to also go through the job API
+.venv39/bin/python -m pytest -q                 # 452 tests
 ```
 
-### 4.2 Running the Unit and Fuzzing Tests
-```bash
-# Run all tests with short failure tracebacks
-.venv39/bin/pytest -q --tb=short tests/
-```
-
-### 4.3 Python API Usage
+### 4.3 Python API
 ```python
+import qnvkit.qsdk_adapter                      # before importing Qniverse
 from qnvkit.metrics import profile
 from qnvkit.decompose.decomposer import decompose
-from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister
+from Qniverse.QniverseCircuit import *
+from Qniverse.gates import *
 
-# 1. Build circuit
 qc = QniverseCircuit()
-qc.add_register(QuantumRegister(2, 'q'))
-qc.add_gate("h", 0)
-qc.add_gate("cx", 0, 1)
+q = QuantumRegister(2, 'q')
+qc.add_register(q)
+qc.add_gate(h, q[0])
+qc.add_gate(cx, q[0], q[1])
 
-# 2. Profile circuit
-report = profile(qc)
-print(report.summary())
+print(profile(qc).summary())
 
-# 3. Decompose into basis
 result = decompose(qc, basis={"rx", "ry", "rz", "cx"})
-if result.circuit:
-    print("Decomposed successfully! Verified:", result.verified)
-    print("New Depth:", result.after.depth)
+if result.circuit is not None:                  # a new QniverseCircuit; qc is untouched
+    print(result.verified, result.verification_note, result.after.depth)
 else:
-    print("Unsupported operations:", result.unsupported.summary())
+    print(result.unsupported.summary())
 ```
 
 ---
 
-## 5. Known Limitations
-1. **Discrete Basis Approximation:** When decomposing into discrete Clifford+T bases (e.g. `{h, t, cx}`), arbitrary continuous rotation angles (like $R_x(0.35)$) cannot be expressed exactly without approximate Solovay-Kitaev algorithms. In accordance with requirement D.6, such operations are safely flagged in an `UnsupportedReport`, returning `circuit = None` rather than emitting an invalid circuit.
-2. **Entangling Gate Requirement:** If a circuit contains entangling gates (2-qubit or multi-qubit operations) and the user selects a basis set containing only 1-qubit gates (e.g., `{rx, ry, rz}`), decomposition is mathematically impossible. The engine safely detects this and returns an explicit `UnsupportedReport`.
+## 5. Behaviour, Test Evidence and Known Limitations
+- **Output is never unverified.** After decomposition the result is compared with the input (full unitary up to global phase for up to 8 qubits, random-state comparison for 9–16). If the check fails, no circuit is returned. Above 16 qubits the check is skipped and the report says so (`verified=False`, with the reason in `verification_note`).
+- **Test matrix:** every one of the 37 unitary QSDK gates is decomposed into 8 rotation bases (`{rx,ry,rz,cx}`, `{u3,cx}`, `{rz,ry,cz}`, `{rx,rz,cx}`, `{rx,ry,cx}`, `{p,ry,cx}`, `{u1,rx,cz}`, `{u1,u2,u3,cx}`) and must verify; in 3 discrete bases each gate must either verify or be reported as unsupported (`tests/test_c1_gate_basis_matrix.py`).
+- **Global phase:** rewrites are exact up to a global phase, which is unobservable.
+- **Discrete bases** (for example `{h, t, cx}`): only exactly reachable gates are converted (Paulis, `s`, `sdg`, `tdg`, `cz`, `swap`, `ccx`, phases that are multiples of π/4, ...). Arbitrary angles and ancilla-free `c3x`–`c5x` are reported as unsupported; no approximation is attempted.
+- **Basis without an entangling gate** and a circuit that needs one: reported as unsupported.
+- **Non-unitary operations:** `measure`, `reset`, `barrier` are copied in order. For a classically conditioned gate, each emitted gate keeps the same condition; the equivalence check treats conditioned gates as if applied.
+- **Not handled:** `add_module` (QFT/IQFT) and `initialize` are untested; an operation whose QASM name is not one of the 40 documented gates is reported as unsupported.
+- **No gate merging after decomposition:** adjacent rotations are not combined, so counts are not minimal.
+- **Not yet confirmed on the official QSDK:** see `docs/10-qsdk-probe.md` section 1, item 4.

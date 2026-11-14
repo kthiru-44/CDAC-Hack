@@ -7,7 +7,7 @@ Provides invariant checking up to global phase: |Tr(U_a^dagger @ U_b)| / 2^n >= 
 from typing import Dict, Any, List, Tuple
 import numpy as np
 from qnvkit.ir import CircuitIR, Op
-from qnvkit.gates import get_gate_info, _mat_u3
+from qnvkit.gates import get_gate_info
 
 
 def _apply_gate_to_state(state: np.ndarray, gate_mat: np.ndarray, target_qubits: Tuple[int, ...], n: int, endianness: str = "little") -> np.ndarray:
@@ -37,66 +37,32 @@ def _apply_gate_to_state(state: np.ndarray, gate_mat: np.ndarray, target_qubits:
     return np.transpose(contracted, perm)
 
 
+# name -> (number of controls, base 1-qubit gate). Controls come first, the target is last.
+_CONTROLLED = {
+    "cy": (1, "y"), "ch": (1, "h"), "cs": (1, "s"), "ct": (1, "t"), "csdg": (1, "sdg"), "ctdg": (1, "tdg"),
+    "cp": (1, "p"), "cu1": (1, "u1"), "crx": (1, "rx"), "cry": (1, "ry"), "crz": (1, "rz"),
+    "cu2": (1, "u2"), "cu3": (1, "u3"),
+    "ccx": (2, "x"), "c3x": (3, "x"), "c4x": (4, "x"), "c5x": (5, "x"),
+}
+
 
 def _get_op_matrix(op: Op) -> np.ndarray:
-    """Returns matrix for single- or multi-qubit standard gate."""
+    """Returns the matrix of a gate. The first operand is the most significant index."""
     name = op.name
     info = get_gate_info(name)
     if info.matrix_fn is not None:
         return info.matrix_fn(op.params)
-    
-    # Multi-qubit controlled gates
-    if name == "ccx":
-        m = np.eye(8, dtype=complex)
-        m[6:8, 6:8] = np.array([[0, 1], [1, 0]], dtype=complex)
+
+    if name in _CONTROLLED:
+        n_ctrl, base = _CONTROLLED[name]
+        base_mat = get_gate_info(base).matrix_fn(op.params)
+        m = np.eye(2 ** (n_ctrl + 1), dtype=complex)
+        m[-2:, -2:] = base_mat
         return m
-    elif name == "cswap":
+    if name == "cswap":
         m = np.eye(8, dtype=complex)
         m[5, 5] = 0; m[5, 6] = 1
         m[6, 5] = 1; m[6, 6] = 0
-        return m
-    elif name == "ch":
-        h = np.array([[1, 1], [1, -1]], dtype=complex) / np.sqrt(2)
-        m = np.eye(4, dtype=complex)
-        m[2:4, 2:4] = h
-        return m
-    elif name == "cy":
-        y = np.array([[0, -1j], [1j, 0]], dtype=complex)
-        m = np.eye(4, dtype=complex)
-        m[2:4, 2:4] = y
-        return m
-    elif name == "cp":
-        lam = op.params[0] if op.params else 0.0
-        m = np.eye(4, dtype=complex)
-        m[3, 3] = np.exp(1j * lam)
-        return m
-    elif name == "crx":
-        from qnvkit.gates import _mat_rx
-        rx = _mat_rx(op.params)
-        m = np.eye(4, dtype=complex)
-        m[2:4, 2:4] = rx
-        return m
-    elif name == "cry":
-        from qnvkit.gates import _mat_ry
-        ry = _mat_ry(op.params)
-        m = np.eye(4, dtype=complex)
-        m[2:4, 2:4] = ry
-        return m
-    elif name == "crz":
-        from qnvkit.gates import _mat_rz
-        rz = _mat_rz(op.params)
-        m = np.eye(4, dtype=complex)
-        m[2:4, 2:4] = rz
-        return m
-    elif name == "cu1":
-        lam = op.params[0] if op.params else 0.0
-        m = np.eye(4, dtype=complex)
-        m[3, 3] = np.exp(1j * lam)
-        return m
-    elif name == "cu3":
-        u3 = _mat_u3(op.params)
-        m = np.eye(4, dtype=complex)
-        m[2:4, 2:4] = u3
         return m
 
     raise NotImplementedError(f"Matrix not implemented for gate '{name}'.")
@@ -202,3 +168,22 @@ def convert_statevector_endianness(statevector: np.ndarray, num_qubits: int) -> 
     converted = np.transpose(tensor, reversed_axes)
     return converted.flatten()
 
+def check_random_state_equivalence(ir_a: CircuitIR, ir_b: CircuitIR, trials: int = 3, tol: float = 1e-5, seed: int = 7) -> bool:
+    """
+    Equivalence evidence for circuits too large for a full unitary comparison:
+    both circuits are applied to the same random product states and the output states
+    must agree up to a global phase.
+    """
+    if ir_a.num_qubits != ir_b.num_qubits:
+        return False
+    n = ir_a.num_qubits
+    rng = np.random.default_rng(seed)
+    for _ in range(trials):
+        prep = tuple(
+            Op("u3", (q,), params=tuple(float(x) for x in rng.uniform(0, 2 * np.pi, 3))) for q in range(n)
+        )
+        a = CircuitIR(n, ir_a.num_clbits, ir_a.qregs, ir_a.cregs, prep + tuple(ir_a.ops))
+        b = CircuitIR(n, ir_b.num_clbits, ir_b.qregs, ir_b.cregs, prep + tuple(ir_b.ops))
+        if not check_statevector_fidelity(a, b, tol=tol):
+            return False
+    return True

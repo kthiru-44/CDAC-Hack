@@ -1,81 +1,113 @@
 """
-qnvkit.qsdk_adapter: The ONLY file in the repository that imports Qniverse.
-Provides seamless, bidirectional, non-mutating translation between QniverseCircuit and CircuitIR.
+qnvkit.qsdk_adapter: the single place where qnvkit talks to the Qniverse QSDK.
+
+Only documented QSDK calls are used:
+    QniverseCircuit(), QuantumRegister(n, name), ClassicalRegister(n, name),
+    qc.add_register(reg), qc.add_gate(gate_object, *bit_objects),
+    qc.add_conditional_gate(creg, value, gate_object, *qubits), qc.qasm()
+
+Reading a circuit goes through qc.qasm() only, so the input object is never mutated.
+
+The real QSDK is available inside Qniverse JupyterLab (it is not on PyPI). When
+``import Qniverse`` fails, a local stand-in that implements the same documented calls is
+put on sys.path, so the same code runs in both places. ``IS_LIVE_QNIVERSE`` tells which.
 """
 
-from typing import Any, Tuple, Optional
-from qnvkit.ir import CircuitIR, Register, Op
+import contextlib
+import io
+import os
+import sys
+from typing import Any
+
+from qnvkit.ir import CircuitIR
 from qnvkit.qasm.parser2 import parse_qasm2
 
-# Safe import of Qniverse (platform live vs local shim)
 try:
-    from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
-    IS_LIVE_QNIVERSE = True
+    import Qniverse  # noqa: F401
 except ImportError:
-    from qnvkit.shim.Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
-    IS_LIVE_QNIVERSE = False
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "shim"))
+    import Qniverse  # noqa: F401
+
+IS_LIVE_QNIVERSE = not getattr(Qniverse, "IS_LOCAL_STAND_IN", False)
+
+from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister  # noqa: E402
+import Qniverse.gates as _qgates  # noqa: E402
+
+
+def qsdk_description() -> str:
+    if IS_LIVE_QNIVERSE:
+        return "official Qniverse QSDK"
+    return "LOCAL STAND-IN for the QSDK (official package not installed here)"
+
+
+def _gate_object(name: str, params=()):
+    """Returns the documented QSDK gate object, e.g. h, or rx(theta) for parameterised gates."""
+    try:
+        gate = getattr(_qgates, name)
+    except AttributeError:
+        raise ValueError("Gate '%s' is not provided by Qniverse.gates." % name)
+    if params:
+        gate = gate(*[float(p) for p in params])
+    return gate
+
+
+def read_qasm(qc: Any) -> str:
+    """Returns the OpenQASM 2.0 text of a QniverseCircuit via the documented qc.qasm()."""
+    if qc is None:
+        raise ValueError("Input circuit cannot be None.")
+    if not callable(getattr(qc, "qasm", None)):
+        raise TypeError("Expected a QniverseCircuit (object with a qasm() method), got %s." % type(qc).__name__)
+    # qc.qasm() may return the text or print it, depending on the SDK version: handle both.
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        text = qc.qasm()
+    if not isinstance(text, str) or "OPENQASM" not in text:
+        text = buf.getvalue()
+    if not isinstance(text, str) or "OPENQASM" not in text:
+        raise ValueError("qc.qasm() did not produce OpenQASM text; the circuit is missing or malformed.")
+    return text
 
 
 def from_qniverse(qc: Any) -> CircuitIR:
-    """
-    Ingests a QniverseCircuit and returns an immutable CircuitIR.
-    Reads circuit operations strictly through qc.qasm() without mutating the input object.
-    """
-    if qc is None:
-        raise ValueError("Input circuit cannot be None.")
-    if not hasattr(qc, "qasm"):
-        raise TypeError(f"Expected circuit with .qasm() export method, got {type(qc)}.")
-
-    qasm_str = qc.qasm()
-    if not qasm_str or not isinstance(qasm_str, str):
-        raise ValueError("qc.qasm() returned an empty or invalid QASM string.")
-
-    return parse_qasm2(qasm_str)
+    """Reads a QniverseCircuit into an immutable CircuitIR (input is not modified)."""
+    return parse_qasm2(read_qasm(qc))
 
 
 def to_qniverse(ir: CircuitIR) -> Any:
-    """
-    Constructs and returns a brand-new QniverseCircuit from CircuitIR
-    using only documented QSDK calls: add_register, add_gate, add_conditional_gate.
-    """
+    """Builds a brand-new QniverseCircuit from a CircuitIR using documented QSDK calls only."""
     if ir is None:
         raise ValueError("CircuitIR cannot be None.")
 
     qc = QniverseCircuit()
-
-    # Add Quantum Registers
-    for qr in ir.qregs:
-        qc.add_register(QuantumRegister(qr.size, qr.name))
-
-    # Add Classical Registers
-    for cr in ir.cregs:
-        qc.add_register(ClassicalRegister(cr.size, cr.name))
-
-    # Wire mapping (0-indexed global -> local register)
-    q_map = ir.get_qubit_reg_map()
-    c_map = ir.get_clbit_reg_map()
+    qbits, cbits, cregs = [], [], {}
+    for r in ir.qregs:
+        reg = QuantumRegister(r.size, r.name)
+        qc.add_register(reg)
+        qbits.extend(reg[i] for i in range(r.size))
+    for r in ir.cregs:
+        reg = ClassicalRegister(r.size, r.name)
+        qc.add_register(reg)
+        cregs[r.name] = reg
+        cbits.extend(reg[i] for i in range(r.size))
 
     for op in ir.ops:
-        if op.condition:
-            cname, cval = op.condition
-            # Find the creg object or name
-            qc.add_conditional_gate(cname, cval, op.name, *op.qubits)
-            continue
-
+        qs = [qbits[q] for q in op.qubits]
         if op.name == "measure":
-            # For each qubit/clbit pair
-            for q_idx, c_idx in zip(op.qubits, op.clbits):
-                # Use measure gate or measure_all
-                qc.add_gate("measure", q_idx, c_idx)
-        elif op.name == "barrier":
-            qc.add_gate("barrier", *op.qubits)
+            for q, c in zip(op.qubits, op.clbits):
+                qc.add_gate(_gate_object("measure"), qbits[q], cbits[c])
         elif op.name == "reset":
-            for q in op.qubits:
-                qc.add_gate("reset", q)
+            for q in qs:
+                qc.add_gate(_gate_object("reset"), q)
+        elif op.name == "barrier":
+            try:
+                qc.add_gate(_gate_object("barrier"), *qs)
+            except Exception:
+                # The documented form is one qubit per barrier call.
+                for q in qs:
+                    qc.add_gate(_gate_object("barrier"), q)
+        elif op.condition:
+            cname, cval = op.condition
+            qc.add_conditional_gate(cregs[cname], int(cval), _gate_object(op.name, op.params), *qs)
         else:
-            if op.params:
-                qc.add_gate(op.name, *op.qubits, params=list(op.params))
-            else:
-                qc.add_gate(op.name, *op.qubits)
-
+            qc.add_gate(_gate_object(op.name, op.params), *qs)
     return qc

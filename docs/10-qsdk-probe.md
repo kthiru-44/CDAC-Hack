@@ -14,10 +14,11 @@
   ERROR: No matching distribution found for qniverse
   ```
 - **Platform Reality:** The `Qniverse` Python package is proprietary C-DAC software pre-installed in the Qniverse JupyterLab cloud environment (`Python 3.9.13`, `Qiskit 1.1.1`, `Aer 0.14.2`, `NumPy 1.26.4`).
-- **Architectural Solution:**
-  1. We provide a 100% faithful, zero-dependency local shim (`src/qnvkit/shim/`) mirroring the documented `Qniverse` package surface.
-  2. `src/qnvkit/qsdk_adapter.py` seamlessly imports the live `Qniverse` when running in Qniverse JupyterLab, and falls back to `src.qnvkit.shim` when running locally in development or CI.
-  3. This guarantees that all unit tests, property tests, and equivalence tests pass locally (using 0 credits), while running seamlessly inside Qniverse JupyterLab without any code changes.
+- **How we handle it:**
+  1. `src/qnvkit/qsdk_adapter.py` imports the official `Qniverse` package when it exists (Qniverse JupyterLab).
+  2. When it does not exist, a **local stand-in** (`src/qnvkit/shim/Qniverse/`) is put on `sys.path`. It implements the same *documented* calls (gate objects, `q[i]` operands) and rejects any other call style, so local tests exercise exactly the calls the real SDK receives.
+  3. The stand-in is **not** the QSDK and has not been compared against it. Its job API simulates locally and labels every result as "not executed on Qniverse".
+  4. **Still to confirm inside Qniverse JupyterLab:** whether `qc.qasm()` returns or prints the text (the adapter handles both), the exact QASM spelling of each gate, whether one `barrier` call accepts several qubits (the adapter falls back to one call per qubit), and the result format and bit order of `fetch_job_result`.
 
 ---
 
@@ -41,22 +42,23 @@ from Qniverse.api import run, fetch_job_result, job_status, transpiled_code, cre
   qc.add_register(qreg)
   qc.add_register(creg)
   ```
-- **Gate Application:**
-  - `qc.add_gate(gate_name, *qubits, params=...)` or `qc.add_gate(gate_name, *qubits)`
-  - Parameterized gates: `qc.add_gate("rx", 0, params=[1.570796])`
-  - Multi-qubit controlled gates: **the last qubit argument is the target**.
-    - `qc.add_gate("cx", 0, 1)`: control = $q_0$, target = $q_1$.
-    - `qc.add_gate("ccx", 0, 1, 2)`: controls = $q_0, q_1$, target = $q_2$.
-- **Conditional Gates:**
-  - `qc.add_conditional_gate(creg, value, gate, *qubits)`
-- **Non-Unitary & Meta:**
-  - `qc.add_gate("barrier", 0, 1)` or `qc.barrier()`
-  - `qc.add_gate("measure", 0, clbit_idx)` or `qc.measure_all()`
-  - `qc.add_gate("reset", 0)`
-- **Inspection & Export:**
-  - `qc.qasm()` returns a valid OpenQASM 2.0 string representation.
-  - `qc.list_gates()` returns a list of gate names present in the circuit.
-  - `qc.get_registers()` returns `(qregs, cregs)`.
+- **Gate application (gate objects from `Qniverse.gates`, bit objects from the registers):**
+  ```python
+  from Qniverse.gates import *
+  qc.add_gate(h, qreg[0])
+  qc.add_gate(rx(np.pi / 2), qreg[1])          # parameterised gates are called with their angles
+  qc.add_gate(cx, qreg[0], qreg[1])            # the last qubit is the target
+  qc.add_gate(ccx, qreg[0], qreg[1], qreg[2])
+  qc.add_gate(measure, qreg[0], creg[0])       # exactly one Qubit then one Clbit
+  qc.add_gate(reset, qreg[0])
+  qc.add_gate(barrier, qreg[0])
+  qc.add_conditional_gate(creg, 1, h, qreg[1]) # value: int or binary string; not measure/barrier/reset
+  qc.measure_all()                             # fills existing classical registers, then creates `meas`
+  ```
+- **Inspection and export:**
+  - `qc.qasm()`: OpenQASM 2.0 of the circuit. This is the only documented way to read operations back.
+  - `qc.list_gates()`: lists the gates the SDK offers.
+  - `qc.draw("file.svg")`, `qc.download_circuit()`.
 
 ### 2.3 The 40 Documented Gates
 | Category | Gates |
@@ -76,10 +78,10 @@ from Qniverse.api import run, fetch_job_result, job_status, transpiled_code, cre
 The backend builder pattern must be invoked in exact sequence:
 ```python
 # token MUST be defined in global scope or environment
-token = os.environ.get("QNIVERSE_API_KEY", "...")
+token = os.environ["QNIVERSE_API_KEY"]   # must be a global named `token` before Backend()
 
 backend = Backend()
-backend.processor("CPU")            # 1. Processor: "CPU", "GPU", "FPGA", "QPU"
+backend.processor("CPU")            # 1. Processor: "CPU" or "GPU" (see Backend.get_processor())
 backend.hpc("QACC_Cluster")         # 2. HPC: "QACC_Cluster", "Param_Utkarsh", etc.
 backend.simulator("qasm_simulator") # 3. Simulator name
 ```

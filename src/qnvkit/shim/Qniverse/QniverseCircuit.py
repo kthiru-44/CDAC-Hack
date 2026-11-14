@@ -1,151 +1,155 @@
 """
-qnvkit.shim.Qniverse: High-fidelity drop-in mock of the C-DAC QSDK for local development.
-Mirrors the exact documented classes and methods of Qniverse.
+Local stand-in for ``Qniverse.QniverseCircuit`` (used only when the real QSDK is not installed).
+
+It implements the *documented* QSDK calls so that code written against it runs unchanged
+on the real SDK:
+    qc = QniverseCircuit()
+    q = QuantumRegister(3, 'q'); c = ClassicalRegister(3, 'c')
+    qc.add_register(q); qc.add_register(c)
+    qc.add_gate(h, q[0]); qc.add_gate(cx, q[0], q[1]); qc.add_gate(rx(0.5), q[2])
+    qc.add_gate(measure, q[0], c[0])
+    qc.add_conditional_gate(c, 1, x, q[1])
+    qc.qasm()
 """
 
-from typing import List, Tuple, Dict, Any, Optional
-import math
+from .gates import Gate, _GATE_PARAMS
 
 
-class QuantumRegister:
-    def __init__(self, size: int, name: str = 'q'):
-        self.size = size
-        self.name = name
-
-    def __repr__(self):
-        return f"QuantumRegister({self.size}, '{self.name}')"
-
-
-class ClassicalRegister:
-    def __init__(self, size: int, name: str = 'c'):
-        self.size = size
-        self.name = name
+class Qubit:
+    def __init__(self, register, index):
+        self.register = register
+        self.index = index
 
     def __repr__(self):
-        return f"ClassicalRegister({self.size}, '{self.name}')"
+        return "%s[%d]" % (self.register.prefix, self.index)
+
+
+class Clbit(Qubit):
+    pass
+
+
+class _Register:
+    _bit_cls = Qubit
+
+    def __init__(self, size, prefix):
+        if not isinstance(size, int) or size <= 0:
+            raise ValueError("Register size must be a positive integer.")
+        if not isinstance(prefix, str) or not prefix.isalpha():
+            raise ValueError("Register name must contain alphabetic characters only.")
+        if prefix in _GATE_PARAMS:
+            raise ValueError("Register name '%s' conflicts with a gate name." % prefix)
+        self.size = size
+        self.prefix = prefix
+        self.name = prefix
+        self._bits = [self._bit_cls(self, i) for i in range(size)]
+
+    def __getitem__(self, i):
+        return self._bits[i]
+
+    def __len__(self):
+        return self.size
+
+    def __repr__(self):
+        return "%s(%d, '%s')" % (type(self).__name__, self.size, self.prefix)
+
+
+class QuantumRegister(_Register):
+    _bit_cls = Qubit
+
+
+class ClassicalRegister(_Register):
+    _bit_cls = Clbit
 
 
 class QniverseCircuit:
     def __init__(self):
-        self._qregs: List[QuantumRegister] = []
-        self._cregs: List[ClassicalRegister] = []
-        self._ops: List[Dict[str, Any]] = []
+        self._qregs = []
+        self._cregs = []
+        self._ops = []  # (gate, bits, condition)
 
-    def add_register(self, reg: Any):
-        if isinstance(reg, QuantumRegister):
-            self._qregs.append(reg)
-        elif isinstance(reg, ClassicalRegister):
-            self._cregs.append(reg)
+    # ---- registers -------------------------------------------------------
+    def add_register(self, reg):
+        if not isinstance(reg, (QuantumRegister, ClassicalRegister)):
+            raise TypeError("Unknown register type: %r" % type(reg))
+        if any(r.prefix == reg.prefix for r in self._qregs + self._cregs):
+            raise ValueError("Register name '%s' is already used in this circuit." % reg.prefix)
+        (self._qregs if isinstance(reg, QuantumRegister) else self._cregs).append(reg)
+
+    def _owns(self, bit):
+        regs = self._cregs if isinstance(bit, Clbit) else self._qregs
+        return any(bit.register is r for r in regs)
+
+    # ---- gates -----------------------------------------------------------
+    def _check(self, gate, bits):
+        if not isinstance(gate, Gate):
+            raise TypeError("add_gate expects a gate object from Qniverse.gates, got %r." % (gate,))
+        if gate.num_params and len(gate.params) != gate.num_params:
+            raise TypeError("Gate '%s' needs %d parameter(s)." % (gate.name, gate.num_params))
+        for b in bits:
+            if not isinstance(b, Qubit):
+                raise TypeError("Gate operands must be Qubit/Clbit objects such as q[0], got %r." % (b,))
+            if not self._owns(b):
+                raise ValueError("Wire %r does not belong to this circuit." % (b,))
+        if len(set(id(b) for b in bits)) != len(bits):
+            raise ValueError("Duplicate wires are not allowed.")
+        if gate.name == "measure":
+            if len(bits) != 2 or isinstance(bits[0], Clbit) or not isinstance(bits[1], Clbit):
+                raise ValueError("measure requires exactly a Qubit followed by a Clbit.")
         else:
-            raise TypeError(f"Unknown register type: {type(reg)}")
+            if any(isinstance(b, Clbit) for b in bits):
+                raise ValueError("Gate '%s' acts on qubits only." % gate.name)
+            if gate.name != "barrier" and len(bits) != gate.num_qubits:
+                raise ValueError(
+                    "Gate '%s' acts on %d qubit(s), got %d." % (gate.name, gate.num_qubits, len(bits))
+                )
 
-    def add_gate(self, gate: str, *qubits, params=None):
-        g_name = gate.lower() if isinstance(gate, str) else getattr(gate, "name", str(gate)).lower()
-        if g_name == "measure":
-            q_idx = qubits[0]
-            c_idx = qubits[1] if len(qubits) > 1 else q_idx
-            self._ops.append({
-                "type": "measure",
-                "name": "measure",
-                "qubit": q_idx,
-                "clbit": c_idx,
-                "condition": None,
-            })
-            return
-        self._ops.append({
-            "type": "gate",
-            "name": g_name,
-            "qubits": list(qubits),
-            "params": list(params) if params else [],
-            "condition": None,
-        })
+    def add_gate(self, gate, *indices):
+        self._check(gate, indices)
+        self._ops.append((gate, tuple(indices), None))
 
-    def add_conditional_gate(self, creg: Any, value: int, gate: str, *qubits):
-        cname = creg.name if hasattr(creg, 'name') else str(creg)
-        self._ops.append({
-            "type": "gate",
-            "name": gate.lower(),
-            "qubits": list(qubits),
-            "params": [],
-            "condition": (cname, value),
-        })
+    def add_conditional_gate(self, classical_reg, condition, gate, *qubits):
+        if not isinstance(classical_reg, ClassicalRegister) or classical_reg not in self._cregs:
+            raise ValueError("Condition register must be a ClassicalRegister of this circuit.")
+        if isinstance(gate, Gate) and gate.name in ("measure", "barrier", "reset"):
+            raise ValueError("Conditional gate cannot be measure, barrier or reset.")
+        if isinstance(condition, str):
+            condition = int(condition, 2)
+        if not isinstance(condition, int) or condition < 0:
+            raise ValueError("Condition must be a non-negative integer or a binary string.")
+        self._check(gate, qubits)
+        self._ops.append((gate, tuple(qubits), (classical_reg, condition)))
 
     def measure_all(self):
-        # Create classical register if needed
-        total_q = sum(r.size for r in self._qregs)
-        if not self._cregs:
-            self._cregs.append(ClassicalRegister(total_q, 'c'))
-        for q in range(total_q):
-            self._ops.append({
-                "type": "measure",
-                "name": "measure",
-                "qubit": q,
-                "clbit": q,
-                "condition": None,
-            })
+        from .gates import measure
+        qubits = [b for r in self._qregs for b in r._bits]
+        clbits = [b for r in self._cregs for b in r._bits]
+        missing = len(qubits) - len(clbits)
+        if missing > 0:
+            meas = ClassicalRegister(missing, "meas")
+            self.add_register(meas)
+            clbits.extend(meas._bits)
+        for qb, cb in zip(qubits, clbits):
+            self._ops.append((measure, (qb, cb), None))
 
-    def list_gates(self) -> List[str]:
-        return [op["name"] for op in self._ops]
+    def list_gates(self):
+        return [n for n in _GATE_PARAMS]
 
-    def get_registers(self) -> Tuple[List[QuantumRegister], List[ClassicalRegister]]:
-        return list(self._qregs), list(self._cregs)
+    def draw(self, filename=None):
+        return self.qasm()
 
-    def draw(self) -> str:
-        s = f"QniverseCircuit: {sum(r.size for r in self._qregs)} qubits, {len(self._ops)} gates\n"
-        for op in self._ops:
-            s += f"  {op['name']} {op.get('qubits', [])}\n"
-        return s
-
-    def qasm(self) -> str:
-        """Exports to OpenQASM 2.0 text."""
-        lines = [
-            'OPENQASM 2.0;',
-            'include "qelib1.inc";',
-        ]
-        for qr in self._qregs:
-            lines.append(f"qreg {qr.name}[{qr.size}];")
-        for cr in self._cregs:
-            lines.append(f"creg {cr.name}[{cr.size}];")
-
-        # Wire mapping
-        q_map = {}
-        curr = 0
-        for qr in self._qregs:
-            for i in range(qr.size):
-                q_map[curr + i] = (qr.name, i)
-            curr += qr.size
-
-        c_map = {}
-        curr = 0
-        for cr in self._cregs:
-            for i in range(cr.size):
-                c_map[curr + i] = (cr.name, i)
-            curr += cr.size
-
-        for op in self._ops:
-            prefix = ""
-            if op.get("condition"):
-                cname, cval = op["condition"]
-                prefix = f"if({cname}=={cval}) "
-
-            if op["type"] == "measure":
-                q_idx = op["qubit"]
-                c_idx = op["clbit"]
-                qr_name, qr_i = q_map.get(q_idx, ('q', q_idx))
-                cr_name, cr_i = c_map.get(c_idx, ('c', c_idx))
-                lines.append(f"{prefix}measure {qr_name}[{qr_i}] -> {cr_name}[{cr_i}];")
-            elif op["name"] == "barrier":
-                args = [f"{q_map.get(q, ('q', q))[0]}[{q_map.get(q, ('q', q))[1]}]" for q in op["qubits"]]
-                lines.append(f"{prefix}barrier {', '.join(args)};")
-            elif op["name"] == "reset":
-                for q in op["qubits"]:
-                    qr_name, qr_i = q_map.get(q, ('q', q))
-                    lines.append(f"{prefix}reset {qr_name}[{qr_i}];")
-            else:
-                args = [f"{q_map.get(q, ('q', q))[0]}[{q_map.get(q, ('q', q))[1]}]" for q in op["qubits"]]
-                params_str = ""
-                if op.get("params"):
-                    params_str = f"({', '.join(f'{p:.10g}' for p in op['params'])})"
-                lines.append(f"{prefix}{op['name']}{params_str} {', '.join(args)};")
-
+    # ---- export ----------------------------------------------------------
+    def qasm(self):
+        """Returns the circuit as OpenQASM 2.0 text."""
+        lines = ["OPENQASM 2.0;", 'include "qelib1.inc";']
+        for r in self._qregs:
+            lines.append("qreg %s[%d];" % (r.prefix, r.size))
+        for r in self._cregs:
+            lines.append("creg %s[%d];" % (r.prefix, r.size))
+        for gate, bits, cond in self._ops:
+            prefix = "if(%s==%d) " % (cond[0].prefix, cond[1]) if cond else ""
+            if gate.name == "measure":
+                lines.append("%smeasure %r -> %r;" % (prefix, bits[0], bits[1]))
+                continue
+            params = "(%s)" % ", ".join(repr(p) for p in gate.params) if gate.params else ""
+            lines.append("%s%s%s %s;" % (prefix, gate.name, params, ", ".join(repr(b) for b in bits)))
         return "\n".join(lines) + "\n"

@@ -1,33 +1,65 @@
 """
-qnvkit.shim.Qniverse.api: Mock QSDK API execution functions for local development and testing.
+Local stand-in for ``Qniverse.api`` (used only when the real QSDK is not installed).
+
+Nothing is sent to Qniverse. ``run`` simulates the circuit locally with qnvkit's numpy
+simulator and every result is labelled as coming from the local stand-in.
 """
 
-from typing import Dict, Any, Optional
-import uuid
+import numpy as np
+
+_JOBS = {}
 
 
-def run(qc: Any, backend: Any, shots: int = 1024, token: Optional[str] = None, job_name: str = "job") -> str:
-    """Returns a mock job ID for local testing."""
-    return f"mock_job_{uuid.uuid4().hex[:8]}"
+def run(qc, backend, shots, token=None, job_name="job"):
+    if backend._simulator is None:
+        raise ValueError("Processor and HPC must be set before setting Simulator.")
+    from qnvkit.qasm.parser2 import parse_qasm2
+    from qnvkit.sim import compute_statevector
 
-
-def fetch_job_result(job_id: str, token: Optional[str] = None) -> Dict[str, Any]:
-    """Returns standard job results dictionary."""
-    return {
-        "job_id": job_id,
-        "status": "COMPLETED",
-        "counts": {"00": 512, "11": 512},
-        "shots": 1024,
+    ir = parse_qasm2(qc.qasm())
+    measures = [op for op in ir.ops if op.name == "measure"]
+    if not measures:
+        raise RuntimeError("Circuit has no measurements to sample.")
+    probs = np.abs(compute_statevector(ir)) ** 2
+    rng = np.random.default_rng(1234)
+    samples = rng.choice(len(probs), size=shots, p=probs / probs.sum())
+    n = ir.num_qubits
+    counts = {}
+    for s in samples:
+        bits = ["0"] * ir.num_clbits
+        for op in measures:
+            # statevector index: qubit 0 is the most significant bit
+            bits[op.clbits[0]] = str((int(s) >> (n - 1 - op.qubits[0])) & 1)
+        key = "".join(reversed(bits))  # classical bit 0 printed right-most
+        counts[key] = counts.get(key, 0) + 1
+    job_id = len(_JOBS) + 1
+    _JOBS[job_id] = {
+        "probability": counts, "shots": shots,
+        "backend": "LOCAL STAND-IN (not executed on Qniverse)", "job_name": job_name,
     }
+    return job_id
 
 
-def job_status(job_id: str, token: Optional[str] = None) -> str:
+def fetch_job_result(token, job):
+    return dict(_JOBS[job])
+
+
+def job_status(token, job):
     return "COMPLETED"
 
 
-def transpiled_code(job_id: str, token: Optional[str] = None) -> str:
-    return "OPENQASM 2.0;"
+def job_details(token, job):
+    return {"job_id": job, "job_name": _JOBS[job]["job_name"], "backend": _JOBS[job]["backend"]}
 
 
-def credit_balance(token: Optional[str] = None) -> int:
-    return 50
+def transpiled_code(token, job):
+    return ""
+
+
+def credit_balance(token):
+    return 0
+
+
+def get_backend(token):
+    from .backend import _SIMS
+    return {"%s/%s" % k: v for k, v in _SIMS.items()}

@@ -29,6 +29,27 @@ def decompose_ccx(c1: int, c2: int, t: int, cond=None) -> List[Op]:
     ]
 
 
+_MCX_NAME = {1: "cx", 2: "ccx", 3: "c3x", 4: "c4x"}
+
+
+def _multi_controlled_phase(controls: List[int], t: int, lam: float, cond=None) -> List[Op]:
+    """
+    Exact multi-controlled phase gate (Barenco et al. 1995, Lemma 7.5 with V = P(lam/2)):
+        C^n P(lam) = CP(lam/2)(c_n, t) . C^{n-1}X(c_1..c_{n-1} -> c_n) . CP(-lam/2)(c_n, t)
+                     . C^{n-1}X(c_1..c_{n-1} -> c_n) . C^{n-1}P(lam/2)(c_1..c_{n-1}, t)
+    """
+    if len(controls) == 1:
+        return [Op("cp", (controls[0], t), params=(lam,), condition=cond)]
+    rest, last = controls[:-1], controls[-1]
+    mcx = Op(_MCX_NAME[len(rest)], tuple(rest) + (last,), condition=cond)
+    return [
+        Op("cp", (last, t), params=(lam / 2.0,), condition=cond),
+        mcx,
+        Op("cp", (last, t), params=(-lam / 2.0,), condition=cond),
+        mcx,
+    ] + _multi_controlled_phase(rest, t, lam / 2.0, cond)
+
+
 def decompose_multi_qubit_gate(op: Op, basis: Set[str]) -> Optional[List[Op]]:
     """
     Decomposes multi-qubit gates (ccx, cswap, c3x, c4x, c5x) into smaller gates.
@@ -52,42 +73,14 @@ def decompose_multi_qubit_gate(op: Op, basis: Set[str]) -> Optional[List[Op]]:
             Op("cx", (t2, t1), condition=cond),
         ]
 
-    if name == "c3x":
-        # 4-qubit MCX on c1, c2, c3, target t
-        c1, c2, c3, t = qubits
-        # Decompose using Barenco construction with CRx(pi/2)
-        # CV(c3, t) -> CX(c2, c3) -> CV_dag(c3, t) -> CX(c2, c3) -> CV(c2, t) with CCX on c1, c2
-        # Standard recursive step:
-        return [
-            Op("h", (t,), condition=cond),
-            Op("crz", (c3, t), params=(np.pi / 2,), condition=cond),
-            Op("ccx", (c1, c2, c3), condition=cond),
-            Op("crz", (c3, t), params=(-np.pi / 2,), condition=cond),
-            Op("ccx", (c1, c2, c3), condition=cond),
-            Op("h", (t,), condition=cond),
-        ]
-
-    if name == "c4x":
-        c1, c2, c3, c4, t = qubits
-        return [
-            Op("h", (t,), condition=cond),
-            Op("crz", (c4, t), params=(np.pi / 2,), condition=cond),
-            Op("c3x", (c1, c2, c3, c4), condition=cond),
-            Op("crz", (c4, t), params=(-np.pi / 2,), condition=cond),
-            Op("c3x", (c1, c2, c3, c4), condition=cond),
-            Op("h", (t,), condition=cond),
-        ]
-
-    if name == "c5x":
-        c1, c2, c3, c4, c5, t = qubits
-        return [
-            Op("h", (t,), condition=cond),
-            Op("crz", (c5, t), params=(np.pi / 2,), condition=cond),
-            Op("c4x", (c1, c2, c3, c4, c5), condition=cond),
-            Op("crz", (c5, t), params=(-np.pi / 2,), condition=cond),
-            Op("c4x", (c1, c2, c3, c4, c5), condition=cond),
-            Op("h", (t,), condition=cond),
-        ]
+    if name in ("c3x", "c4x", "c5x"):
+        # C^n X = H(t) . C^n Z . H(t), with C^n Z = multi-controlled phase(pi) (exact, no ancilla).
+        controls, t = list(qubits[:-1]), qubits[-1]
+        return (
+            [Op("h", (t,), condition=cond)]
+            + _multi_controlled_phase(controls, t, np.pi, cond)
+            + [Op("h", (t,), condition=cond)]
+        )
 
     return None
 
@@ -222,18 +215,17 @@ def decompose_two_qubit_gate(op: Op, basis: Set[str]) -> Optional[List[Op]]:
         theta = params[0] if len(params) > 0 else 0.0
         phi = params[1] if len(params) > 1 else 0.0
         lam = params[2] if len(params) > 2 else 0.0
-        # ABC decomposition:
-        # A = Rz(phi) Ry(theta/2)
-        # B = Ry(-theta/2) Rz(-(phi+lam)/2)
-        # C = Rz((lam-phi)/2)
+        # ABC decomposition (Nielsen & Chuang, Cor. 4.2), listed in circuit (time) order:
+        #   C = Rz((lam-phi)/2), B = Ry(-theta/2) Rz(-(phi+lam)/2), A = Rz(phi) Ry(theta/2)
+        #   controlled-U3 = P((phi+lam)/2) on control . A . CX . B . CX . C
         return [
             Op("rz", (t,), params=((lam - phi) / 2.0,), condition=cond),
             Op("cx", (c, t), condition=cond),
-            Op("ry", (t,), params=(-theta / 2.0,), condition=cond),
             Op("rz", (t,), params=(-(phi + lam) / 2.0,), condition=cond),
+            Op("ry", (t,), params=(-theta / 2.0,), condition=cond),
             Op("cx", (c, t), condition=cond),
-            Op("rz", (t,), params=(phi,), condition=cond),
             Op("ry", (t,), params=(theta / 2.0,), condition=cond),
+            Op("rz", (t,), params=(phi,), condition=cond),
             Op("p", (c,), params=((phi + lam) / 2.0,), condition=cond),
         ]
 

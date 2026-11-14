@@ -223,3 +223,6 @@ __marimo__/
 # Graphify
 graphify-out/
 
+
+# local virtual environments
+.venv*/

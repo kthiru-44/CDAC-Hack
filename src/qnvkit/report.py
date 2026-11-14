@@ -27,11 +27,12 @@ class ProfileReport:
     def summary(self) -> str:
         lines = [
             f"--- Circuit Profile Report ---",
-            f"Total Gates: {self.total_gates} | Depth: {self.depth}",
-            f"Qubits (Declared / Active): {self.qubits_declared} / {self.qubits_used}",
-            f"Gates by Arity: 1Q={self.single_qubit_gates}, 2Q={self.two_qubit_gates}, MultiQ={self.multi_qubit_gates}",
+            f"Total Gates (unitary): {self.total_gates} | Depth: {self.depth}",
+            f"Qubits (Declared / Used): {self.qubits_declared} / {self.qubits_used}",
+            f"Single-qubit gates: {self.single_qubit_gates} | Multi-qubit gates (2 or more qubits): "
+            f"{self.two_qubit_gates + self.multi_qubit_gates} (two-qubit: {self.two_qubit_gates}, three or more: {self.multi_qubit_gates})",
             f"Non-Unitary: Meas={self.measurements}, Reset={self.resets}, Barrier={self.barriers}",
-            f"Gate Breakdown: {self.gate_counts}",
+            f"Count by operation type: {self.gate_counts}",
         ]
         return "\n".join(lines)
 
@@ -62,16 +63,18 @@ class DecomposeResult:
     """Result of basis gate decomposition (QC-C1-01)."""
     circuit: Optional[Any]  # QniverseCircuit (or None if unsupported)
     ir: Optional[Any]       # CircuitIR
-    before: ProfileReport
+    before: Optional[ProfileReport]
     after: Optional[ProfileReport]
     unsupported: Optional[UnsupportedReport]
-    verified: bool = False  # True if unitary or statevector equivalence verified
+    verified: bool = False  # True only if the equivalence check ran and passed
+    verification_note: str = ""  # which check ran, or why it was skipped
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "success": self.circuit is not None,
             "verified": self.verified,
-            "before": self.before.to_dict(),
+            "verification_note": self.verification_note,
+            "before": self.before.to_dict() if self.before else None,
             "after": self.after.to_dict() if self.after else None,
             "unsupported": self.unsupported.to_dict() if self.unsupported else None,
         }
@@ -81,10 +84,10 @@ class DecomposeResult:
         lines = [
             f"==========================================",
             f"Basis Decomposition: {status}",
-            f"Equivalence Verified: {self.verified}",
-            f"--- Metrics Before Decomposition ---",
-            self.before.summary(),
+            f"Equivalence Verified: {self.verified}" + (f" ({self.verification_note})" if self.verification_note else ""),
         ]
+        if self.before:
+            lines.extend([f"--- Metrics Before Decomposition ---", self.before.summary()])
         if self.after:
             lines.extend([
                 f"--- Metrics After Decomposition ---",

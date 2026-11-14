@@ -10,7 +10,7 @@ from qnvkit.gates import DOCUMENTED_GATE_NAMES, is_valid_gate_name, get_gate_mat
 from qnvkit.metrics import profile
 from qnvkit.report import ProfileReport, UnsupportedReport, DecomposeResult
 from qnvkit.qsdk_adapter import from_qniverse, to_qniverse
-from qnvkit.sim import check_unitary_equivalence, check_statevector_fidelity
+from qnvkit.sim import check_unitary_equivalence, check_random_state_equivalence
 from qnvkit.decompose.euler import synthesize_1q_unitary, decompose_discrete_1q_gate
 from qnvkit.decompose.rules import decompose_multi_qubit_gate, decompose_two_qubit_gate
 
@@ -68,34 +68,60 @@ def _expand_op_recursive(
 
     # 3. Single-qubit
     if arity == 1:
-        # Check discrete lookup first
+        def expand_all(ops: List[Op]) -> Optional[List[Op]]:
+            out: List[Op] = []
+            for sub_op in ops:
+                sub_res = _expand_op_recursive(sub_op, basis_set, depth + 1, max_depth)
+                if sub_res is None:
+                    return None
+                out.extend(sub_res)
+            return out
+
+        # a) continuous Euler synthesis when the basis offers rotations
+        mat = get_gate_matrix(op.name, op.params)
+        synth_ops = synthesize_1q_unitary(mat, op.qubits[0], basis_set, condition=op.condition)
+        if synth_ops is not None:
+            return synth_ops
+
+        # b) exact discrete rewrites (e.g. into {h, t})
         discrete_res = decompose_discrete_1q_gate(op, basis_set)
         if discrete_res is not None:
-            res: List[Op] = []
-            for sub_op in discrete_res:
-                sub_res = _expand_op_recursive(sub_op, basis_set, depth + 1, max_depth)
-                if sub_res is None:
-                    return None
-                res.extend(sub_res)
-            return res
-
-        # Fall back to continuous Euler matrix synthesis
-        try:
-            mat = get_gate_matrix(op.name, op.params)
-            synth_ops = synthesize_1q_unitary(mat, op.qubits[0], basis_set, condition=op.condition)
-            if synth_ops is None:
-                return None
-            res: List[Op] = []
-            for sub_op in synth_ops:
-                sub_res = _expand_op_recursive(sub_op, basis_set, depth + 1, max_depth)
-                if sub_res is None:
-                    return None
-                res.extend(sub_res)
-            return res
-        except Exception:
-            return None
+            return expand_all(discrete_res)
+        return None
 
     return None
+
+
+# Largest circuit for a full unitary comparison / for a random-state comparison.
+MAX_UNITARY_QUBITS = 8
+MAX_STATE_QUBITS = 16
+
+
+def _verify(ir: CircuitIR, decomposed_ir: CircuitIR):
+    """Returns (verified, note). verified is None when the circuit is too large to check."""
+    n = ir.num_qubits
+    if n <= MAX_UNITARY_QUBITS:
+        ok = check_unitary_equivalence(ir, decomposed_ir)
+        return ok, "full unitary comparison up to global phase (%d qubits)" % n
+    if n <= MAX_STATE_QUBITS:
+        ok = check_random_state_equivalence(ir, decomposed_ir)
+        return ok, "random-state comparison up to global phase (%d qubits, 3 states)" % n
+    return None, "not verified: %d qubits exceeds the %d-qubit limit of the built-in check" % (n, MAX_STATE_QUBITS)
+
+
+def _unsupported_reason(op: Op, basis: Set[str]) -> str:
+    names = sorted(basis)
+    if len(op.qubits) == 1:
+        if not ({"u3"} & basis or len({"rx", "ry", "rz", "p", "u1"} & basis) >= 2):
+            return (
+                "'%s' cannot be written exactly with the 1-qubit gates in basis %s "
+                "(a discrete basis only reaches specific gates; add rotations such as rz+ry or u3)." % (op.name, names)
+            )
+        return "No exact 1-qubit synthesis for '%s' in basis %s." % (op.name, names)
+    return (
+        "'%s' needs gates that basis %s cannot express exactly "
+        "(its decomposition uses 1-qubit rotations/phases and an entangling gate cx or cz)." % (op.name, names)
+    )
 
 
 def decompose(
@@ -117,11 +143,28 @@ def decompose(
     # 1. Input Validation
     if circuit is None:
         raise ValueError("Input circuit cannot be None.")
+    if isinstance(basis, str):
+        raise TypeError("Basis must be a list or set of gate names, e.g. {'rx', 'ry', 'rz', 'cx'}.")
 
     if not isinstance(circuit, CircuitIR):
         ir = from_qniverse(circuit)
     else:
         ir = circuit
+
+    # Operations the decomposer does not know are reported, never passed through silently.
+    unknown = sorted({op.name for op in ir.ops if op.name not in DOCUMENTED_GATE_NAMES})
+    if unknown:
+        return DecomposeResult(
+            circuit=None, ir=None, before=None, after=None,
+            unsupported=UnsupportedReport(
+                unsupported_gates=tuple(
+                    {"gate": g, "qubits": [], "reason": "Operation '%s' is not one of the documented QSDK gates handled by the profiler." % g}
+                    for g in unknown
+                ),
+                is_valid=False,
+            ),
+            verified=False,
+        )
 
     if not basis:
         raise ValueError("Basis gate set cannot be empty.")
@@ -185,7 +228,7 @@ def decompose(
                 "gate": op.name,
                 "qubits": list(op.qubits),
                 "params": list(op.params),
-                "reason": f"No decomposition rule available to convert '{op.name}' into basis {sorted(normalized_basis)}"
+                "reason": _unsupported_reason(op, normalized_basis)
             })
         else:
             decomposed_ops.extend(expanded)
@@ -220,17 +263,25 @@ def decompose(
     # Calculate metrics after decomposition
     profile_after = profile(decomposed_ir)
 
-    # Verify mathematical equivalence
-    verified = False
-    try:
-        if ir.num_qubits <= 8:
-            verified = check_unitary_equivalence(ir, decomposed_ir)
-        else:
-            verified = check_statevector_fidelity(ir, decomposed_ir)
-    except Exception:
-        verified = False
+    # Verify equivalence. A circuit that fails the check is never returned.
+    verified, note = _verify(ir, decomposed_ir)
+    if verified is False:
+        unsupported = UnsupportedReport(
+            unsupported_gates=(
+                {
+                    "gate": "EQUIVALENCE_CHECK",
+                    "qubits": [],
+                    "reason": "Decomposed circuit failed the equivalence check (%s); no circuit emitted." % note,
+                },
+            ),
+            is_valid=False,
+        )
+        return DecomposeResult(
+            circuit=None, ir=None, before=profile_before, after=None,
+            unsupported=unsupported, verified=False, verification_note=note,
+        )
 
-    # Convert back to QniverseCircuit
+    # Build a new QniverseCircuit (the input object is untouched)
     decomposed_qc = to_qniverse(decomposed_ir)
 
     return DecomposeResult(
@@ -239,5 +290,6 @@ def decompose(
         before=profile_before,
         after=profile_after,
         unsupported=None,
-        verified=verified
+        verified=bool(verified),
+        verification_note=note,
     )

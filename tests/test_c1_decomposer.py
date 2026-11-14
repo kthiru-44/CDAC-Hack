@@ -8,7 +8,9 @@ import numpy as np
 from qnvkit.ir import CircuitIR, Register, Op
 from qnvkit.decompose.decomposer import decompose
 from qnvkit.metrics import profile
-from qnvkit.shim.Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
+import qnvkit.qsdk_adapter  # noqa: F401  (makes the QSDK, or its local stand-in, importable)
+from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
+from Qniverse.gates import h, cx
 
 
 def test_decompose_native_qniverse_basis():
@@ -119,9 +121,10 @@ def test_preserves_measurements_and_barriers():
 def test_input_immutability():
     """Verify input circuit is strictly unmodified."""
     qc = QniverseCircuit()
-    qc.add_register(QuantumRegister(2, 'q'))
-    qc.add_gate("h", 0)
-    qc.add_gate("cx", 0, 1)
+    q = QuantumRegister(2, 'q')
+    qc.add_register(q)
+    qc.add_gate(h, q[0])
+    qc.add_gate(cx, q[0], q[1])
 
     original_qasm = qc.qasm()
     result = decompose(qc, {"rx", "ry", "rz", "cx"})
