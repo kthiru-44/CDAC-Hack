@@ -44,20 +44,20 @@ def to_qasm2_str(circuit: Any) -> str:
     return emit_qasm2(ir)
 
 
-def draw_circuit(circuit: Any, output: str = "text") -> str:
+def draw_circuit(circuit: Any, output: Optional[str] = None) -> Any:
     """
-    Renders a circuit diagram as a string using Qiskit box drawing or native circuit drawer.
+    Renders a circuit diagram using Qiskit qc.draw() (graphical image where supported).
 
     Parameters:
       circuit: QniverseCircuit, CircuitIR, or OpenQASM string.
-      output: 'text' for Unicode box-drawing diagram.
+      output: 'mpl' for matplotlib image, 'text' for Unicode box-drawing, or None (auto-detect).
 
     Returns:
-      String representation of the circuit diagram.
+      Matplotlib Figure (if mpl), TextDrawing, or string representation.
     """
     if hasattr(circuit, "draw") and callable(circuit.draw):
         try:
-            return str(circuit.draw(output=output))
+            return circuit.draw(output=output)
         except Exception:
             pass
 
@@ -65,9 +65,24 @@ def draw_circuit(circuit: Any, output: str = "text") -> str:
         from qiskit import QuantumCircuit
         qasm_str = to_qasm2_str(circuit)
         qc = QuantumCircuit.from_qasm_str(qasm_str)
-        return str(qc.draw(output=output))
+        try:
+            drawn = qc.draw(output=output or "mpl")
+        except Exception:
+            drawn = qc.draw(output=output or "text")
+        try:
+            from IPython.display import display
+            display(drawn)
+        except Exception:
+            print(drawn)
+        return drawn
     except Exception:
-        return to_qasm2_str(circuit).strip()
+        text = to_qasm2_str(circuit).strip()
+        try:
+            from IPython.display import display
+            display(text)
+        except Exception:
+            print(text)
+        return text
 
 
 def _simulate_numpy(ir: CircuitIR, shots: int = 1024) -> Tuple[Dict[str, int], str]:

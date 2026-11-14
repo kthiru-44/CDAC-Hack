@@ -56,11 +56,11 @@ print("qnvkit unpacked to", _dir)
 ''' % payload)
 
 pip_install_common = code('''
-# Cell: Install execution frameworks for local simulation (Qiskit & Aer)
+# Cell: Install execution frameworks and graphical drawers (Qiskit, Aer, Matplotlib)
 # Purges cache first and uses --no-cache-dir to prevent container disk exhaustion
 import subprocess, sys
 subprocess.run([sys.executable, "-m", "pip", "cache", "purge"], capture_output=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "--quiet", "qiskit", "qiskit-aer"], check=False)
+subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "--quiet", "qiskit", "qiskit-aer", "matplotlib", "pylatexenc"], check=False)
 ''')
 
 diagnose = code('''
@@ -163,11 +163,11 @@ print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
 print("qnvkit transpiler ready!")
 ''')
     pip_c2 = code('''
-# Cell: Install execution frameworks for cross-framework verification (Qiskit, Aer, Cirq)
+# Cell: Install execution frameworks for cross-framework verification (Qiskit, Aer, Cirq, Matplotlib)
 # Purges cache first and uses --no-cache-dir to prevent container disk exhaustion
 import subprocess, sys
 subprocess.run([sys.executable, "-m", "pip", "cache", "purge"], capture_output=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "--quiet", "qiskit", "qiskit-aer", "cirq-core"], check=False)
+subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "--quiet", "qiskit", "qiskit-aer", "cirq-core", "matplotlib", "pylatexenc"], check=False)
 ''')
     framework_check = code('''
 # Check available target frameworks in this Python environment.

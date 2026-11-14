@@ -93,17 +93,28 @@ def _qniverse_circuit_draw(self, *args, **kwargs):
             except Exception:
                 pass
 
-    out_fmt = kwargs.get("output", "text")
+    out_fmt = kwargs.get("output", None)
     try:
         from qiskit import QuantumCircuit as QC
         qasm_text = read_qasm(self)
         qc_qk = QC.from_qasm_str(qasm_text)
-        drawn = qc_qk.draw(output=out_fmt)
-        print(drawn)
+        try:
+            drawn = qc_qk.draw(output=out_fmt or "mpl")
+        except Exception:
+            drawn = qc_qk.draw(output=out_fmt or "text")
+        try:
+            from IPython.display import display
+            display(drawn)
+        except Exception:
+            print(drawn)
         return drawn
     except Exception:
         qasm_text = read_qasm(self)
-        print(qasm_text)
+        try:
+            from IPython.display import display
+            display(qasm_text)
+        except Exception:
+            print(qasm_text)
         return qasm_text
 
 

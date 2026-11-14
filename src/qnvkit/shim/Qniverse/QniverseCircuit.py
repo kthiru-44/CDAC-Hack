@@ -136,17 +136,29 @@ class QniverseCircuit:
     def list_gates(self):
         return [n for n in _GATE_PARAMS]
 
-    def draw(self, *args, output="text", filename=None, **kwargs):
+    def draw(self, *args, output=None, filename=None, **kwargs):
         if kwargs.get("silent", False):
             return None
         try:
             from qiskit import QuantumCircuit as QC
-            drawn = QC.from_qasm_str(self.qasm()).draw(output=output or "text")
-            print(drawn)
+            qc_qk = QC.from_qasm_str(self.qasm())
+            try:
+                drawn = qc_qk.draw(output=output or "mpl")
+            except Exception:
+                drawn = qc_qk.draw(output=output or "text")
+            try:
+                from IPython.display import display
+                display(drawn)
+            except Exception:
+                print(drawn)
             return drawn
         except Exception:
             text = self.qasm()
-            print(text)
+            try:
+                from IPython.display import display
+                display(text)
+            except Exception:
+                print(text)
             return text
 
     # ---- export ----------------------------------------------------------
