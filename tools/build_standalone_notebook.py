@@ -26,7 +26,7 @@ with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
                 z.write(full, os.path.relpath(full, SRC))
 payload = "\n".join(textwrap.wrap(base64.b64encode(buf.getvalue()).decode(), 100))
 
-nb = json.load(open(os.path.join(ROOT, "notebooks", "c1_demo.ipynb")))
+nb1 = json.load(open(os.path.join(ROOT, "notebooks", "c1_demo.ipynb")))
 
 
 def code(text):
@@ -108,9 +108,9 @@ except Exception as e:
     print("source not available:", e)
 ''')
 
-cells = nb["cells"]
-# The repo notebook searches for src folders; the standalone one must only use its embedded copy.
-cells[1] = code('''
+# --- Build C1 standalone ---
+cells1 = nb1["cells"]
+cells1[1] = code('''
 import qnvkit, qnvkit.qsdk_adapter as adapter          # must be imported before Qniverse
 from qnvkit.metrics import profile
 from qnvkit.decompose.decomposer import decompose
@@ -122,13 +122,40 @@ import numpy as np
 print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
 print("QSDK in use:", adapter.qsdk_description())
 ''')
-cells[0] = md('''
+cells1[0] = md('''
 # QC-C1-01: Circuit Profiling and Limited Basis-Gate Decomposition
 PESU – C-DAC Quantum Hackathon 2026
 
 **Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second reports whether the **official Qniverse QSDK** is in use.
 ''')
-nb["cells"] = [cells[0], unpack, diagnose, cells[1], check] + cells[2:]
-out = os.path.join(ROOT, "notebooks", "c1_demo_standalone.ipynb")
-json.dump(nb, open(out, "w"), indent=1)
-print("wrote", out, "(%d KB)" % (os.path.getsize(out) // 1024))
+nb1["cells"] = [cells1[0], unpack, diagnose, cells1[1], check] + cells1[2:]
+out1 = os.path.join(ROOT, "notebooks", "c1_demo_standalone.ipynb")
+json.dump(nb1, open(out1, "w"), indent=1)
+print("wrote", out1, "(%d KB)" % (os.path.getsize(out1) // 1024))
+
+# --- Build C2 standalone ---
+c2_path = os.path.join(ROOT, "notebooks", "c2_demo.ipynb")
+if os.path.exists(c2_path):
+    nb2 = json.load(open(c2_path))
+    cells2 = nb2["cells"]
+    cells2[1] = code('''
+import os, sys
+import qnvkit
+from qnvkit.transpile.api import transpile
+from qnvkit.qasm.parser3 import parse_qasm3
+from qnvkit.metrics import profile
+from qnvkit.decompose.decomposer import decompose
+
+print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
+print("qnvkit transpiler ready!")
+''')
+    cells2[0] = md('''
+# QC-C2-03: OpenQASM 3.0 Transpiler across Qiskit, Cirq, CUDA-Q & QSDK
+PESU – C-DAC Quantum Hackathon 2026
+
+**Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package.
+''')
+    nb2["cells"] = [cells2[0], unpack, cells2[1]] + cells2[2:]
+    out2 = os.path.join(ROOT, "notebooks", "c2_demo_standalone.ipynb")
+    json.dump(nb2, open(out2, "w"), indent=1)
+    print("wrote", out2, "(%d KB)" % (os.path.getsize(out2) // 1024))

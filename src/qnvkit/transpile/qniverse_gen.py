@@ -81,7 +81,10 @@ def generate_qniverse_code(circuit: CircuitIR) -> TranspileResult:
         params = [f"{p:.12g}" for p in op.params]
 
         if name == "barrier":
-            lines.append(f"{indent}qc.add_gate('barrier', {', '.join(qubits)})")
+            if len(qubits) >= 2:
+                lines.append(f"{indent}qc.add_gate('barrier', {qubits[0]}, {qubits[-1]})")
+            else:
+                lines.append(f"{indent}# 1-qubit barrier omitted: official QSDK requires a span of >= 2 qubits")
         elif name == "reset":
             lines.append(f"{indent}qc.add_gate('reset', {qubits[0]})")
         elif name == "measure":
