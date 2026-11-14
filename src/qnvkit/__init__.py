@@ -11,6 +11,7 @@ from qnvkit.report import ProfileReport, DecomposeResult, UnsupportedReport, Opt
 from qnvkit.metrics import profile
 from qnvkit.decompose.decomposer import decompose
 from qnvkit.transpile.api import transpile
+from qnvkit.optimize.optimizer import optimize
 
 __all__ = [
     "Op",
@@ -24,5 +25,6 @@ __all__ = [
     "profile",
     "decompose",
     "transpile",
+    "optimize",
 ]
 
