@@ -64,15 +64,49 @@ print([l for l in _pip.splitlines() if "niverse" in l.lower() or "qsdk" in l.low
 ''')
 
 check = code('''
-# What the QSDK itself reports (useful if anything below fails).
-_probe = QniverseCircuit()
-_q = QuantumRegister(2, 'q'); _c = ClassicalRegister(2, 'c')
-_probe.add_register(_q); _probe.add_register(_c)
-_probe.add_gate(h, _q[0]); _probe.add_gate(cp(0.5), _q[0], _q[1]); _probe.add_gate(u3(0.1, 0.2, 0.3), _q[1])
-_probe.add_gate(barrier, _q[0]); _probe.add_gate(measure, _q[0], _c[0])
-_ret = _probe.qasm()
-print("qc.qasm() returned:", type(_ret).__name__)
-print(adapter.read_qasm(_probe))
+# What the real QSDK does with the constructs this demo uses. Every probe is isolated, so one
+# failure does not stop the others. Please keep this output if anything below fails.
+import traceback
+
+def _probe(label, build):
+    qc = QniverseCircuit()
+    q = QuantumRegister(3, 'q'); c = ClassicalRegister(3, 'c')
+    qc.add_register(q); qc.add_register(c)
+    try:
+        build(qc, q, c)
+        text = adapter.read_qasm(qc)
+        print("[OK]  %s\\n%s\\n" % (label, "\\n".join("      " + l for l in text.splitlines()[4:])))
+    except Exception as e:
+        print("[ERR] %s -> %s: %s\\n" % (label, type(e).__name__, e))
+
+_probe("h, cp, u3, measure", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(cp(0.5), q[0], q[1]),
+       qc.add_gate(u3(0.1, 0.2, 0.3), q[1]), qc.add_gate(measure, q[0], c[0])))
+_probe("barrier on 2 qubits q[0],q[1]", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0], q[1])))
+_probe("barrier on 2 qubits q[0],q[2]", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0], q[2])))
+_probe("barrier on 3 qubits", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0], q[1], q[2])))
+_probe("barrier on 1 qubit", lambda qc, q, c: (qc.add_gate(h, q[0]), qc.add_gate(barrier, q[0])))
+_probe("reset + conditional", lambda qc, q, c: (qc.add_gate(measure, q[0], c[0]), qc.add_gate(reset, q[1]),
+       qc.add_conditional_gate(c, 1, x, q[1])))
+_probe("ccx, swap, crz, measure_all", lambda qc, q, c: (qc.add_gate(ccx, q[0], q[1], q[2]), qc.add_gate(swap, q[0], q[1]),
+       qc.add_gate(crz(0.7), q[0], q[1]), qc.measure_all()))
+
+# Source of the SDK's own QASM export around barriers (read-only; for debugging).
+try:
+    import importlib, inspect
+    if not adapter.IS_LIVE_QNIVERSE:
+        raise RuntimeError("the official QSDK is not in use, so there is no SDK source to show")
+    _m = importlib.import_module(adapter.QSDK_IMPORT_NAME + ".transpile.qasm")
+    _lines = inspect.getsource(_m).splitlines()
+    _hits = [i for i, l in enumerate(_lines) if "barrier" in l.lower()]
+    print("--- SDK source lines mentioning 'barrier' (with context) ---")
+    _shown = set()
+    for i in _hits:
+        for j in range(max(0, i - 6), min(len(_lines), i + 22)):
+            if j not in _shown:
+                _shown.add(j); print("%4d  %s" % (j + 1, _lines[j]))
+        print("      ...")
+except Exception as e:
+    print("source not available:", e)
 ''')
 
 cells = nb["cells"]

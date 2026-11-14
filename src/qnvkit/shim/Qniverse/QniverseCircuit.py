@@ -138,7 +138,7 @@ class QniverseCircuit:
         return self.qasm()
 
     # ---- export ----------------------------------------------------------
-    def qasm(self):
+    def qasm(self, shots=None):
         """Returns the circuit as OpenQASM 2.0 text."""
         lines = ["OPENQASM 2.0;", 'include "qelib1.inc";']
         for r in self._qregs:
@@ -150,6 +150,9 @@ class QniverseCircuit:
             if gate.name == "measure":
                 lines.append("%smeasure %r -> %r;" % (prefix, bits[0], bits[1]))
                 continue
+            if gate.name == "barrier" and len(bits) < 2:
+                # Observed on the official SDK (qniverse 1.0.6): qc.qasm() raises this error.
+                raise ValueError("Barrier requires at least two qubits")
             params = "(%s)" % ", ".join(repr(p) for p in gate.params) if gate.params else ""
             lines.append("%s%s%s %s;" % (prefix, gate.name, params, ", ".join(repr(b) for b in bits)))
         return "\n".join(lines) + "\n"

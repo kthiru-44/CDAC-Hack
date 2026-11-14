@@ -112,7 +112,7 @@ def test_measure_reset_barrier_are_copied_in_order():
     qc.add_register(q)
     qc.add_register(c)
     qc.add_gate(G.h, q[0])
-    qc.add_gate(G.barrier, q[0])
+    qc.add_gate(G.barrier, q[0], q[1])
     qc.add_gate(G.reset, q[1])
     qc.add_gate(G.swap, q[0], q[1])
     qc.add_gate(G.measure, q[0], c[1])
@@ -142,3 +142,14 @@ def test_stand_in_rejects_undocumented_call_style():
         qc.add_gate("h", q[0])
     with pytest.raises(TypeError):
         qc.add_gate(G.h, 0)
+
+
+def test_one_qubit_barrier_is_omitted_with_warning():
+    """The official SDK cannot hold a one-qubit barrier (qc.qasm() raises); the IR keeps it."""
+    from qnvkit.ir import CircuitIR, Register, Op
+    ir = CircuitIR(2, 0, (Register("q", 2),), (), (Op("h", (0,)), Op("barrier", (0,)), Op("cx", (0, 1))))
+    result = decompose(ir, {"u3", "cx"})
+    assert result.circuit is not None
+    assert result.warnings and "barrier" in result.warnings[0]
+    assert any(op.name == "barrier" for op in result.ir.ops)
+    assert "barrier" not in result.circuit.qasm()

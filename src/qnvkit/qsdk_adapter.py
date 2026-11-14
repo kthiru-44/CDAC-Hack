@@ -92,7 +92,10 @@ def read_qasm(qc: Any) -> str:
     # qc.qasm() may return the text or print it, depending on the SDK version: handle both.
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        text = qc.qasm()
+        try:
+            text = qc.qasm()
+        except TypeError:
+            text = qc.qasm(1)  # some SDK versions require the `shots` argument
     if not isinstance(text, str) or "OPENQASM" not in text:
         text = buf.getvalue()
     if not isinstance(text, str) or "OPENQASM" not in text:
@@ -103,6 +106,11 @@ def read_qasm(qc: Any) -> str:
 def from_qniverse(qc: Any) -> CircuitIR:
     """Reads a QniverseCircuit into an immutable CircuitIR (input is not modified)."""
     return parse_qasm2(read_qasm(qc))
+
+
+def unrepresentable_barriers(ir: CircuitIR) -> int:
+    """Number of one-qubit barriers, which the official SDK cannot hold (to_qniverse omits them)."""
+    return sum(1 for op in ir.ops if op.name == "barrier" and len(op.qubits) < 2)
 
 
 def to_qniverse(ir: CircuitIR) -> Any:
@@ -131,12 +139,11 @@ def to_qniverse(ir: CircuitIR) -> Any:
             for q in qs:
                 qc.add_gate(_gate_object("reset"), q)
         elif op.name == "barrier":
-            try:
+            # The official SDK (qniverse 1.0.6) raises "Barrier requires at least two qubits" in
+            # qc.qasm() for a one-qubit barrier, so such barriers cannot be represented. A barrier
+            # has no effect on the unitary; it is omitted here (the IR keeps it, see unrepresentable_barriers).
+            if len(qs) >= 2:
                 qc.add_gate(_gate_object("barrier"), *qs)
-            except Exception:
-                # The documented form is one qubit per barrier call.
-                for q in qs:
-                    qc.add_gate(_gate_object("barrier"), q)
         elif op.condition:
             cname, cval = op.condition
             qc.add_conditional_gate(cregs[cname], int(cval), _gate_object(op.name, op.params), *qs)

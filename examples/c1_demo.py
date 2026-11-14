@@ -38,8 +38,7 @@ def build_sample_circuit():
     qc.add_gate(swap, q[0], q[2])
     qc.add_gate(crz(0.7), q[0], q[1])
     qc.add_gate(ccx, q[0], q[1], q[2])
-    for i in range(3):
-        qc.add_gate(barrier, q[i])
+    qc.add_gate(barrier, q[0], q[1], q[2])
     for i in range(3):
         qc.add_gate(measure, q[i], c[i])
     return qc

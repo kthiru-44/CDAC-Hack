@@ -68,12 +68,14 @@ class DecomposeResult:
     unsupported: Optional[UnsupportedReport]
     verified: bool = False  # True only if the equivalence check ran and passed
     verification_note: str = ""  # which check ran, or why it was skipped
+    warnings: Tuple[str, ...] = ()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "success": self.circuit is not None,
             "verified": self.verified,
             "verification_note": self.verification_note,
+            "warnings": list(self.warnings),
             "before": self.before.to_dict() if self.before else None,
             "after": self.after.to_dict() if self.after else None,
             "unsupported": self.unsupported.to_dict() if self.unsupported else None,
@@ -93,6 +95,8 @@ class DecomposeResult:
                 f"--- Metrics After Decomposition ---",
                 self.after.summary(),
             ])
+        for w in self.warnings:
+            lines.append(f"WARNING: {w}")
         if self.unsupported and self.unsupported.unsupported_gates:
             lines.append(self.unsupported.summary())
         lines.append(f"==========================================")

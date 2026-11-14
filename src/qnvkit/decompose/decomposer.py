@@ -9,7 +9,7 @@ from qnvkit.ir import CircuitIR, Op
 from qnvkit.gates import DOCUMENTED_GATE_NAMES, is_valid_gate_name, get_gate_matrix
 from qnvkit.metrics import profile
 from qnvkit.report import ProfileReport, UnsupportedReport, DecomposeResult
-from qnvkit.qsdk_adapter import from_qniverse, to_qniverse
+from qnvkit.qsdk_adapter import from_qniverse, to_qniverse, unrepresentable_barriers
 from qnvkit.sim import check_unitary_equivalence, check_random_state_equivalence
 from qnvkit.decompose.euler import synthesize_1q_unitary, decompose_discrete_1q_gate
 from qnvkit.decompose.rules import decompose_multi_qubit_gate, decompose_two_qubit_gate
@@ -283,6 +283,13 @@ def decompose(
 
     # Build a new QniverseCircuit (the input object is untouched)
     decomposed_qc = to_qniverse(decomposed_ir)
+    warnings = []
+    n_bar = unrepresentable_barriers(decomposed_ir)
+    if n_bar:
+        warnings.append(
+            "%d one-qubit barrier(s) were left out of the returned QniverseCircuit because the QSDK "
+            "needs at least two qubits per barrier; they are kept in result.ir and counted in the profile." % n_bar
+        )
 
     return DecomposeResult(
         circuit=decomposed_qc,
@@ -292,4 +299,5 @@ def decompose(
         unsupported=None,
         verified=bool(verified),
         verification_note=note,
+        warnings=tuple(warnings),
     )
