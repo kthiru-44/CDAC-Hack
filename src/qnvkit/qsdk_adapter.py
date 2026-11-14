@@ -73,7 +73,7 @@ def _qniverse_circuit_draw(self, *args, **kwargs):
     """
     orig = getattr(self, "_orig_draw", None)
     # Always call official QSDK draw if available to generate self._svg_cache needed for run()
-    if callable(orig):
+    if callable(orig) and IS_LIVE_QNIVERSE:
         try:
             res = orig(*args, **kwargs)
             if kwargs.get("silent", False):
