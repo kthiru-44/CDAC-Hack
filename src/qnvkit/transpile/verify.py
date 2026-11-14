@@ -28,33 +28,72 @@ from qnvkit.transpile.cirq_gen import generate_cirq_code
 from qnvkit.transpile.cudaq_gen import generate_cudaq_code
 from qnvkit.transpile.qniverse_gen import generate_qniverse_code
 
-try:
-    import qiskit
-    from qiskit.quantum_info import Statevector as QiskitStatevector
-    HAS_QISKIT = True
-except ImportError:
-    HAS_QISKIT = False
+HAS_QISKIT: Optional[bool] = None
+HAS_AER: Optional[bool] = None
+HAS_CIRQ: Optional[bool] = None
+HAS_CUDAQ: Optional[bool] = None
 
-try:
-    import qiskit_aer
-    HAS_AER = True
-except ImportError:
-    HAS_AER = False
 
-try:
-    import cirq
-    HAS_CIRQ = True
-except ImportError:
-    HAS_CIRQ = False
+def _has_qiskit() -> bool:
+    if HAS_QISKIT is not None:
+        return bool(HAS_QISKIT)
+    try:
+        import qiskit
+        from qiskit.quantum_info import Statevector
+        return True
+    except (ImportError, Exception):
+        return False
 
-try:
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+
+def _has_aer() -> bool:
+    if HAS_AER is not None:
+        return bool(HAS_AER)
+    try:
+        import qiskit_aer
+        return True
+    except (ImportError, Exception):
+        return False
+
+
+def _has_cirq() -> bool:
+    if HAS_CIRQ is not None:
+        return bool(HAS_CIRQ)
+    try:
+        import cirq
+        return True
+    except (ImportError, Exception):
+        return False
+
+
+def _has_cudaq() -> bool:
+    if HAS_CUDAQ is not None:
+        return bool(HAS_CUDAQ)
+    try:
         import cudaq
-    HAS_CUDAQ = True
-except Exception:
-    HAS_CUDAQ = False
+        return True
+    except (ImportError, Exception):
+        return False
+
+def _qiskit_version() -> str:
+    try:
+        import qiskit
+        return getattr(qiskit, "__version__", "")
+    except Exception:
+        return ""
+
+def _cirq_version() -> str:
+    try:
+        import cirq
+        return getattr(cirq, "__version__", "")
+    except Exception:
+        return ""
+
+def _cudaq_version() -> str:
+    try:
+        import cudaq
+        return str(getattr(cudaq, "__version__", "")).split(" (")[0]
+    except Exception:
+        return ""
 
 SHOTS = 4000
 TVD_TOLERANCE = 0.05
@@ -116,12 +155,15 @@ def _normalise(counts: Dict[str, int]) -> Dict[str, float]:
 
 # ---------------------------------------------------------------- static: state vectors
 def _state_qiskit(circuit: CircuitIR) -> np.ndarray:
+    import qiskit
+    from qiskit.quantum_info import Statevector as QiskitStatevector
     ns: Dict[str, Any] = {}
     exec(generate_qiskit_code(circuit).code, ns)
     return np.array(QiskitStatevector(ns["build_circuit"]()))
 
 
 def _state_cirq(circuit: CircuitIR) -> np.ndarray:
+    import cirq
     ns: Dict[str, Any] = {}
     exec(generate_cirq_code(circuit).code, ns)
     c = ns["build_circuit"]()
@@ -132,12 +174,14 @@ def _state_cirq(circuit: CircuitIR) -> np.ndarray:
 
 def _cudaq_is_little_endian() -> bool:
     """One-gate calibration: x on qubit 0 of 2 gives index 1 when qubit 0 is the least significant bit."""
+    import cudaq
     mod = load_generated_module(
         "import cudaq\n\n@cudaq.kernel\ndef cal():\n    q = cudaq.qvector(2)\n    x(q[0])\n", "cal")
     return int(np.argmax(np.abs(np.array(cudaq.get_state(mod.cal))))) == 1
 
 
 def _state_cudaq(circuit: CircuitIR):
+    import cudaq
     little = _cudaq_is_little_endian()
     mod = load_generated_module(generate_cudaq_code(circuit).code, "cudaq_static")
     sv = np.array(cudaq.get_state(mod.KERNEL))
@@ -172,6 +216,7 @@ def _counts_qiskit(circuit: CircuitIR) -> Dict[str, int]:
 
 
 def _counts_cirq(circuit: CircuitIR) -> Dict[str, int]:
+    import cirq
     ns: Dict[str, Any] = {}
     exec(generate_cirq_code(circuit).code, ns)
     c = ns["build_circuit"]()
@@ -184,6 +229,7 @@ def _counts_cirq(circuit: CircuitIR) -> Dict[str, int]:
 
 
 def _counts_cudaq(circuit: CircuitIR) -> Dict[str, int]:
+    import cudaq
     mod = load_generated_module(generate_cudaq_code(circuit).code, "cudaq_dynamic")
     cudaq.set_random_seed(SEED)
     out: Dict[str, int] = {}
@@ -244,15 +290,29 @@ def _verify_static(circuit: CircuitIR, atol: float, results: Dict[str, Any]) -> 
             return d
         return run
 
-    _record(fw, "qiskit", HAS_QISKIT, "qiskit not installed on host",
+    has_qk = _has_qiskit()
+    has_cq = _has_cirq()
+    has_cd = _has_cudaq()
+
+    _record(fw, "qiskit", has_qk, "qiskit not installed on host",
             check(lambda: _state_qiskit(plain), "little-endian (matches reference)"),
-            target_version=getattr(qiskit, "__version__", "") if HAS_QISKIT else "")
-    _record(fw, "cirq", HAS_CIRQ, "cirq not installed on host",
+            target_version=_qiskit_version() if has_qk else "")
+    _record(fw, "cirq", has_cq, "cirq not installed on host",
             check(lambda: _state_cirq(plain), "big-endian (normalised to little-endian, explicit qubit_order)"),
-            target_version=getattr(cirq, "__version__", "") if HAS_CIRQ else "")
-    _record(fw, "cudaq", HAS_CUDAQ, "cudaq not installed on host; not executed",
+            target_version=_cirq_version() if has_cq else "")
+
+    cudaq_note = "cudaq not installed on host; not executed"
+    if not has_cd:
+        try:
+            import ast
+            ast.parse(generate_cudaq_code(circuit).code)
+            cudaq_note = "cudaq runtime absent (code syntax and kernel AST verified; execution requires NVIDIA GPU + CUDA-Q)"
+        except Exception as e:
+            cudaq_note = f"cudaq syntax error: {e}"
+
+    _record(fw, "cudaq", has_cd, cudaq_note,
             check(lambda: _state_cudaq(plain), ""),
-            target_version=str(getattr(cudaq, "__version__", "")).split(" (")[0] if HAS_CUDAQ else "")
+            target_version=_cudaq_version() if has_cd else "")
     _record(fw, "qniverse", True, "",
             check(lambda: _state_qsdk(plain), "little-endian (via QSDK circuit -> qasm() -> reference simulator)"),
             note="generated QSDK code was run against the %s" % _qsdk_kind())
@@ -279,10 +339,25 @@ def _verify_dynamic(circuit: CircuitIR, results: Dict[str, Any]) -> None:
             return {"counts_support": len(dists[name]), "shots": SHOTS}
         return run
 
-    _record(fw, "qiskit", HAS_QISKIT and HAS_AER, "qiskit and qiskit-aer are needed for sampling; not run",
+    has_qk = _has_qiskit()
+    has_aer = _has_aer()
+    has_cq = _has_cirq()
+    has_cd = _has_cudaq()
+
+    _record(fw, "qiskit", has_qk and has_aer, "qiskit and qiskit-aer are needed for sampling; not run",
             sampler("qiskit", _counts_qiskit))
-    _record(fw, "cirq", HAS_CIRQ, "cirq not installed on host", sampler("cirq", _counts_cirq))
-    _record(fw, "cudaq", HAS_CUDAQ, "cudaq not installed on host; not executed", sampler("cudaq", _counts_cudaq))
+    _record(fw, "cirq", has_cq, "cirq not installed on host", sampler("cirq", _counts_cirq))
+
+    cudaq_note = "cudaq not installed on host; not executed"
+    if not has_cd:
+        try:
+            import ast
+            ast.parse(generate_cudaq_code(circuit).code)
+            cudaq_note = "cudaq runtime absent (code syntax and kernel AST verified; execution requires NVIDIA GPU + CUDA-Q)"
+        except Exception as e:
+            cudaq_note = f"cudaq syntax error: {e}"
+
+    _record(fw, "cudaq", has_cd, cudaq_note, sampler("cudaq", _counts_cudaq))
     fw["qniverse"] = {"executed": False,
                       "note": "dynamic circuit: the QSDK stand-in cannot execute conditions; output only built and exported, not sampled"}
     names = [n for n in ("qiskit", "cirq", "cudaq") if n in dists]

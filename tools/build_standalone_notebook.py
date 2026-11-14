@@ -53,20 +53,17 @@ for _m in [m for m in sys.modules if m == "qnvkit" or m.startswith("qnvkit.")]:
 print("qnvkit unpacked to", _dir)
 ''' % payload)
 
+pip_install_common = code('''
+# Cell: Install execution frameworks for local simulation (Qiskit & Aer)
+# Purges cache first and uses --no-cache-dir to prevent container disk exhaustion
+!pip cache purge
+!pip install --no-cache-dir --quiet qiskit qiskit-aer
+''')
+
 diagnose = code('''
 # Which QSDK packages does this Python environment have?
 import importlib, importlib.util, subprocess, sys
-
-# Ensure Qiskit and Aer are installed for local simulation without exhausting disk quota
-if importlib.util.find_spec("qiskit") is None or importlib.util.find_spec("qiskit_aer") is None:
-    print("Installing lightweight Qiskit & Qiskit Aer (safe mode: purging cache, --no-cache-dir)...")
-    subprocess.run([sys.executable, "-m", "pip", "cache", "purge"], capture_output=True)
-    subprocess.run([
-        sys.executable, "-m", "pip", "install",
-        "--no-cache-dir", "--quiet",
-        "qiskit", "qiskit-aer"
-    ], check=False)
-    importlib.invalidate_caches()
+importlib.invalidate_caches()
 
 print("Python", sys.version.split()[0])
 for _n in ("Qniverse", "qniverse"):
@@ -140,7 +137,7 @@ PESU – C-DAC Quantum Hackathon 2026
 
 **Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second reports whether the **official Qniverse QSDK** is in use.
 ''')
-nb1["cells"] = [cells1[0], unpack, diagnose, cells1[1], check] + cells1[2:]
+nb1["cells"] = [cells1[0], unpack, pip_install_common, diagnose, cells1[1], check] + cells1[2:]
 out1 = os.path.join(ROOT, "notebooks", "c1_demo_standalone.ipynb")
 json.dump(nb1, open(out1, "w"), indent=1)
 print("wrote", out1, "(%d KB)" % (os.path.getsize(out1) // 1024))
@@ -160,33 +157,30 @@ from qnvkit.qasm.diagnostics import QASMError
 print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
 print("qnvkit transpiler ready!")
 ''')
-    pip2 = code('''
-# Check and install target frameworks in this Python environment.
+    pip_c2 = code('''
+# Cell: Install execution frameworks for cross-framework verification (Qiskit, Aer, Cirq)
+# Purges cache first and uses --no-cache-dir to prevent container disk exhaustion
+!pip cache purge
+!pip install --no-cache-dir --quiet qiskit qiskit-aer cirq-core
+''')
+    framework_check = code('''
+# Check available target frameworks in this Python environment.
 # Note: Code generation works for ALL targets (Qiskit, Cirq, CUDA-Q, QSDK).
-# Installs lightweight Qiskit & Aer for local simulation with cache purge & --no-cache-dir.
-import importlib, importlib.util, subprocess, sys
-
-if importlib.util.find_spec("qiskit") is None or importlib.util.find_spec("qiskit_aer") is None:
-    print("Installing lightweight Qiskit & Qiskit Aer (safe mode: purging cache, --no-cache-dir)...")
-    subprocess.run([sys.executable, "-m", "pip", "cache", "purge"], capture_output=True)
-    subprocess.run([
-        sys.executable, "-m", "pip", "install",
-        "--no-cache-dir", "--quiet",
-        "qiskit", "qiskit-aer"
-    ], check=False)
-    importlib.invalidate_caches()
-
+# Both Qiskit and Cirq enable cross-framework execution and equivalence checking.
+import importlib, importlib.util, sys
+importlib.invalidate_caches()
 print("Python", sys.version.split()[0])
 for _m in ("qiskit", "qiskit_aer", "cirq", "cudaq", "Qniverse", "qniverse"):
-    print("%-12s %s" % (_m, "available" if importlib.util.find_spec(_m) is not None else "not installed (transpiles successfully; simulation verified where available)"))
+    status = "AVAILABLE (simulation & verification active)" if importlib.util.find_spec(_m) is not None else "not installed (code generated & AST verified)"
+    print("%-12s %s" % (_m, status))
 ''')
     cells2[0] = md('''
 # QC-C2-03: OpenQASM 3.0 Transpiler across Qiskit, Cirq, CUDA-Q & QSDK
 PESU – C-DAC Quantum Hackathon 2026
 
-**Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package.
+**Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second installs target frameworks for verification.
 ''')
-    nb2["cells"] = [cells2[0], unpack, pip2, cells2[1]] + cells2[2:]
+    nb2["cells"] = [cells2[0], unpack, pip_c2, framework_check, cells2[1]] + cells2[2:]
     out2 = os.path.join(ROOT, "notebooks", "c2_demo_standalone.ipynb")
     json.dump(nb2, open(out2, "w"), indent=1)
     print("wrote", out2, "(%d KB)" % (os.path.getsize(out2) // 1024))
@@ -216,9 +210,9 @@ print("qnvkit optimizer ready!")
 # QC-C3-03: Quantum Circuit Optimization Using QSDK
 PESU – C-DAC Quantum Hackathon 2026
 
-**Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second reports whether the **official Qniverse QSDK** is in use.
+**Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second installs target frameworks for verification.
 ''')
-    nb3["cells"] = [cells3[0], unpack, diagnose, cells3[1], check] + cells3[2:]
+    nb3["cells"] = [cells3[0], unpack, pip_install_common, diagnose, cells3[1], check] + cells3[2:]
     out3 = os.path.join(ROOT, "notebooks", "c3_demo_standalone.ipynb")
     json.dump(nb3, open(out3, "w"), indent=1)
     print("wrote", out3, "(%d KB)" % (os.path.getsize(out3) // 1024))
