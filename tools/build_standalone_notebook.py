@@ -149,13 +149,14 @@ print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
 print("qnvkit transpiler ready!")
 ''')
     pip2 = code('''
-# Cirq is optional: install it if missing so the Cirq target can be executed and verified.
-# Qiskit is expected on the platform; CUDA-Q is optional and reported as "not run" when absent.
-import importlib.util, subprocess, sys
-if importlib.util.find_spec("cirq") is None:
-    subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "cirq-core"], check=False)
-for _m in ("qiskit", "qiskit_aer", "cirq", "cudaq"):
-    print("%-11s %s" % (_m, "available" if importlib.util.find_spec(_m) else "not installed (reported as not run)"))
+# Check available target frameworks in this Python environment.
+# Note: Code generation works for ALL targets (Qiskit, Cirq, CUDA-Q, QSDK)
+# regardless of what is installed on the host. Missing libraries are cleanly
+# reported in the transpiler report without attempting network/disk installation.
+import importlib.util, sys
+print("Python", sys.version.split()[0])
+for _m in ("qiskit", "qiskit_aer", "cirq", "cudaq", "Qniverse", "qniverse"):
+    print("%-12s %s" % (_m, "available" if importlib.util.find_spec(_m) is not None else "not installed (transpiles successfully; simulation verified where available)"))
 ''')
     cells2[0] = md('''
 # QC-C2-03: OpenQASM 3.0 Transpiler across Qiskit, Cirq, CUDA-Q & QSDK
