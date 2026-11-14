@@ -18,7 +18,8 @@
   1. `src/qnvkit/qsdk_adapter.py` imports the official `Qniverse` package when it exists (Qniverse JupyterLab).
   2. When it does not exist, a **local stand-in** (`src/qnvkit/shim/Qniverse/`) is put on `sys.path`. It implements the same *documented* calls (gate objects, `q[i]` operands) and rejects any other call style, so local tests exercise exactly the calls the real SDK receives.
   3. The stand-in is **not** the QSDK and has not been compared against it. Its job API simulates locally and labels every result as "not executed on Qniverse".
-  4. **Still to confirm inside Qniverse JupyterLab:** whether `qc.qasm()` returns or prints the text (the adapter handles both), the exact QASM spelling of each gate, whether one `barrier` call accepts several qubits (the adapter falls back to one call per qubit), and the result format and bit order of `fetch_job_result`.
+  4. The docs spell the package both `Qniverse` (manual) and `qniverse` (FAQ, `pip install qniverse`). The adapter tries both and aliases a lowercase install as `Qniverse`.
+  5. **Still to confirm inside Qniverse JupyterLab:** whether `qc.qasm()` returns or prints the text (the adapter handles both), the exact QASM spelling of each gate, whether one `barrier` call accepts several qubits (the adapter falls back to one call per qubit), and the result format and bit order of `fetch_job_result`.
 
 ---
 

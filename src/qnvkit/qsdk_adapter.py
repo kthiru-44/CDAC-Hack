@@ -22,10 +22,42 @@ from typing import Any
 from qnvkit.ir import CircuitIR
 from qnvkit.qasm.parser2 import parse_qasm2
 
-try:
-    import Qniverse  # noqa: F401
-except ImportError:
+import importlib
+
+_SUBMODULES = ("QniverseCircuit", "gates", "backend", "api", "module", "transpile")
+
+
+def _load_official_qsdk():
+    """
+    Imports the official QSDK. The documentation spells the package both `Qniverse` and
+    `qniverse`; on Linux these differ, so both are tried. A lowercase install is aliased as
+    `Qniverse` (including submodules) so the rest of qnvkit always imports `Qniverse.*`.
+    Returns the name that worked, or None.
+    """
+    for top in ("Qniverse", "qniverse"):
+        try:
+            pkg = importlib.import_module(top)
+        except ImportError:
+            continue
+        if top != "Qniverse":
+            sys.modules["Qniverse"] = pkg
+            for sub in _SUBMODULES:
+                for cand in (sub, sub.lower(), sub[0].lower() + sub[1:]):
+                    try:
+                        mod = importlib.import_module("%s.%s" % (top, cand))
+                    except ImportError:
+                        continue
+                    sys.modules["Qniverse." + sub] = mod
+                    break
+        return top
+    return None
+
+
+QSDK_IMPORT_NAME = _load_official_qsdk()
+if QSDK_IMPORT_NAME is None:
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "shim"))
+    import Qniverse  # noqa: F401  (local stand-in)
+else:
     import Qniverse  # noqa: F401
 
 IS_LIVE_QNIVERSE = not getattr(Qniverse, "IS_LOCAL_STAND_IN", False)
@@ -36,7 +68,7 @@ import Qniverse.gates as _qgates  # noqa: E402
 
 def qsdk_description() -> str:
     if IS_LIVE_QNIVERSE:
-        return "official Qniverse QSDK"
+        return "official Qniverse QSDK (imported as '%s')" % QSDK_IMPORT_NAME
     return "LOCAL STAND-IN for the QSDK (official package not installed here)"
 
 

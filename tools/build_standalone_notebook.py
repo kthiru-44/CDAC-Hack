@@ -51,6 +51,16 @@ if _dir not in sys.path:
 print("qnvkit unpacked to", _dir)
 ''' % payload)
 
+diagnose = code('''
+# Which QSDK packages does this Python environment have? (helps if the QSDK is not found below)
+import sys, importlib.util, subprocess
+print("Python", sys.version.split()[0])
+for _n in ("Qniverse", "qniverse"):
+    print("importable as %r:" % _n, importlib.util.find_spec(_n) is not None)
+_pip = subprocess.run([sys.executable, "-m", "pip", "list"], capture_output=True, text=True).stdout
+print([l for l in _pip.splitlines() if "niverse" in l.lower() or "qsdk" in l.lower()])
+''')
+
 check = code('''
 # What the QSDK itself reports (useful if anything below fails).
 _probe = QniverseCircuit()
@@ -70,7 +80,7 @@ PESU – C-DAC Quantum Hackathon 2026
 
 **Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second reports whether the **official Qniverse QSDK** is in use.
 ''')
-nb["cells"] = [cells[0], unpack, cells[1], check] + cells[2:]
+nb["cells"] = [cells[0], unpack, diagnose, cells[1], check] + cells[2:]
 out = os.path.join(ROOT, "notebooks", "c1_demo_standalone.ipynb")
 json.dump(nb, open(out, "w"), indent=1)
 print("wrote", out, "(%d KB)" % (os.path.getsize(out) // 1024))
