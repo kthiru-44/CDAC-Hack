@@ -1,8 +1,0 @@
-System logs
-===============
-
-.. toctree::
-   :maxdepth: 2
-
-   licenses
-   support

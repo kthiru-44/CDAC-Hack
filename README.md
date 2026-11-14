@@ -201,13 +201,14 @@ pytest tests/test_c3_*.py
 
 ---
 
-## 📚 Knowledge Base & Scraped Documentation
+## 📚 Documentation & Technical References
 
-To ensure 100% compliance with C-DAC QSDK standards, our repository contains complete scraped reference materials from the official platform:
-* **[docs/documentation/](docs/documentation/)**: Scraped Sphinx manuals, QSDK guides, API documentation, and release notes from `https://qniverse.in`.
-* **[docs/tutorial-sessions-documentation.md](docs/tutorial-sessions-documentation.md)**: Transcripts and slide OCR from Tutorial Sessions 1, 2, and 3.
-* **[docs/10-qsdk-probe.md](docs/10-qsdk-probe.md)**: Documented QSDK API surface, 40-gate catalog, and backend execution hierarchy.
-* **[graphify-out/GRAPH_REPORT.md](graphify-out/GRAPH_REPORT.md)**: Graphify-generated knowledge graph (1,575 nodes, 3,108 edges) mapping every function and dependency.
+To ensure 100% compliance with C-DAC QSDK standards and full reproducibility of our solutions, our repository provides complete user guides and technical references:
+* **[docs/c1-01-user-guide.md](docs/c1-01-user-guide.md)**: QC-C1-01 Circuit Profiling & Basis Decomposition User Guide.
+* **[docs/c2-03-user-guide.md](docs/c2-03-user-guide.md)**: QC-C2-03 OpenQASM 3.0 Transpiler & Multi-Framework AST Generators User Guide.
+* **[docs/c3-03-user-guide.md](docs/c3-03-user-guide.md)**: QC-C3-03 Quantum Circuit Optimizer & Rule Catalog User Guide.
+* **[docs/09-qniverse-integration.md](docs/09-qniverse-integration.md)**: Live Qniverse REST API client & cloud execution pipeline.
+* **[docs/10-qsdk-probe.md](docs/10-qsdk-probe.md)**: Verified QSDK API surface, 40-gate catalog, and backend execution hierarchy.
 
 ---
 

@@ -1,9 +1,0 @@
-Licenses
-------------
-
-Ownership: CDAC Quantum is owned by CDAC, including all rights, titles, and interest. 
-Intellectual Property: All intellectual property rights and title to pre-existing materials are unaffected by this Agreement. 
-License Grant: For the term of this Agreement, CDAC grants You a limited, non-exclusive, non-transferable license to access and use CDAC Quantum for research, education, testing, evaluation, and feedback purposes, all provided by You.
-
-
-----------
