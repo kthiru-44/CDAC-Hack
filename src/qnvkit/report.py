@@ -141,6 +141,11 @@ class TranspilerReport:
     equivalence_verified: Optional[bool] = None
     fidelity: Optional[float] = None
     execution_notes: Optional[str] = None
+    notes: List[str] = field(default_factory=list)  # informational; never changes status
+
+    def add_note(self, msg: str) -> None:
+        if msg not in self.notes:
+            self.notes.append(msg)
 
     def add_warning(self, msg: str) -> None:
         self.warnings.append(msg)
@@ -170,6 +175,7 @@ class TranspilerReport:
             "equivalence_verified": self.equivalence_verified,
             "fidelity": self.fidelity,
             "execution_notes": self.execution_notes,
+            "notes": list(self.notes),
         }
 
     def to_json(self, indent: int = 2) -> str:

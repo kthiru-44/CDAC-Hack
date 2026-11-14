@@ -132,6 +132,8 @@ def test_transpile_barrier_all_targets():
     """
     res = transpile(qasm, targets=["qiskit", "cirq", "cudaq", "qniverse"])
     assert "qc.barrier(q[0], q[1])" in res["qiskit"].code
-    assert "# Barrier on q[0], q[1]" in res["cirq"].code
-    assert "# Barrier on q[0], q[1]" in res["cudaq"].code
+    for t in ("cirq", "cudaq"):
+        compile(res[t].code, t, "exec")  # barrier must never become broken code
+        assert "Barrier" not in res[t].code
+        assert any("barrier omitted" in n for n in res[t].report.notes)
     assert "qc.add_gate(barrier, q[0], q[1])" in res["qniverse"].code

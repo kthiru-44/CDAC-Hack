@@ -20,10 +20,10 @@ def test_cudaq_code_generation():
     assert res.report.status.lower() == "success"
     assert "@cudaq.kernel" in res.code
     assert "q = cudaq.qvector(2)" in res.code
-    assert "cudaq.h(q[0])" in res.code
-    assert "cudaq.x.ctrl(q[0], q[1])" in res.code
-    assert "c_0 = cudaq.mz(q[0])" in res.code
-    assert "c_1 = cudaq.mz(q[1])" in res.code
+    assert "h(q[0])" in res.code and "cudaq.h" not in res.code
+    assert "x.ctrl(q[0], q[1])" in res.code
+    assert "c_0 = mz(q[0])" in res.code
+    assert "c_1 = mz(q[1])" in res.code
 
 
 def test_cudaq_rotations():
@@ -38,6 +38,6 @@ def test_cudaq_rotations():
     cir = parse_qasm3(qasm)
     res = generate_cudaq_code(cir)
 
-    assert "cudaq.rx(1.57, q[0])" in res.code
-    assert "cudaq.ry(3.14, q[0])" in res.code
-    assert "cudaq.rz(0.78, q[0])" in res.code
+    assert "rx(1.57, q[0])" in res.code
+    assert "ry(3.14, q[0])" in res.code
+    assert "rz(0.78, q[0])" in res.code

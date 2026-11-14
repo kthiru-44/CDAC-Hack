@@ -70,7 +70,10 @@ def transpile(
     verify_report = None
     if options.get("verify", False):
         atol = options.get("atol", 1e-5)
-        verify_report = verify_equivalence(circuit, atol=atol)
+        try:
+            verify_report = verify_equivalence(circuit, atol=atol)
+        except Exception as e:  # verification must never break transpilation
+            verify_report = {"error": "verification failed: %s: %s" % (type(e).__name__, e), "frameworks": {}}
 
     # Generate code for requested targets
     results: Dict[str, TranspileResult] = {}
@@ -87,13 +90,17 @@ def transpile(
 
         if verify_report:
             res.report.metrics["cross_framework_verification"] = verify_report
-            fw_info = verify_report.get("frameworks", {}).get(target_norm, {})
-            if "equivalent" in fw_info:
+            fw_key = "qniverse" if target_norm == "qsdk" else target_norm
+            fw_info = verify_report.get("frameworks", {}).get(fw_key, {})
+            if fw_info.get("executed") and "equivalent" in fw_info:
                 res.report.equivalence_verified = fw_info["equivalent"]
-            if "fidelity" in fw_info:
+            if fw_info.get("executed") and "fidelity" in fw_info:
                 res.report.fidelity = fw_info["fidelity"]
-            if "note" in fw_info:
-                res.report.execution_notes = fw_info["note"]
+            note = fw_info.get("note") or fw_info.get("error") or verify_report.get("error")
+            if fw_info.get("executed"):
+                note = "; ".join(x for x in (verify_report.get("mode"), fw_info.get("note")) if x)
+            if note:
+                res.report.execution_notes = note
 
         results[target_norm] = res
 

@@ -28,8 +28,8 @@ def run(qc, backend, shots, token=None, job_name="job"):
     for s in samples:
         bits = ["0"] * ir.num_clbits
         for op in measures:
-            # statevector index: qubit 0 is the most significant bit
-            bits[op.clbits[0]] = str((int(s) >> (n - 1 - op.qubits[0])) & 1)
+            # statevector index is little-endian: qubit q is bit q
+            bits[op.clbits[0]] = str((int(s) >> op.qubits[0]) & 1)
         key = "".join(reversed(bits))  # classical bit 0 printed right-most
         counts[key] = counts.get(key, 0) + 1
     job_id = len(_JOBS) + 1

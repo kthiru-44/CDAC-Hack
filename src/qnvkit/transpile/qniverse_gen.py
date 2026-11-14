@@ -1,19 +1,24 @@
 """
 Target Code Generator for C-DAC Qniverse QSDK.
 
-Generates standalone, runnable Python code targeting the QSDK architecture:
-QniverseCircuit, QuantumRegister, ClassicalRegister, and remote execution on
-C-DAC PARAM / QACC supercomputing clusters.
+Generates standalone Python: it imports only the QSDK (``Qniverse`` or ``qniverse``) and never
+qnvkit. Gate objects come from ``Qniverse.gates``; operands are register elements.
 """
 
 from __future__ import annotations
-from typing import Tuple, Dict, Any
-from qnvkit.ir import CircuitIR, Op
+from typing import Dict, List
+from qnvkit.ir import CircuitIR, Condition
+from qnvkit.gates import DOCUMENTED_GATE_NAMES
 from qnvkit.report import TranspilerReport, TranspileResult
+from qnvkit.transpile._common import (
+    prepare_ops, py_name, fmt_param, qubit_names, clbit_names, set_metrics,
+)
 
-TARGET_VERSION = "QSDK (Qniverse 1.6+)"
+TARGET_VERSION = "QSDK (Qniverse 1.0.6)"
+NATIVE = set(DOCUMENTED_GATE_NAMES) - {"barrier", "measure", "reset"}
 
 
+<<<<<<< HEAD
 def generate_qniverse_code(circuit: Any) -> TranspileResult:
     if not isinstance(circuit, CircuitIR):
         from qnvkit.qsdk_adapter import from_qniverse
@@ -83,55 +88,87 @@ def generate_qniverse_code(circuit: Any) -> TranspileResult:
                 clbits.append(f"{cl.register}[{cl.index}]")
 
         params = [f"{p:.12g}" for p in op.params]
+=======
+def generate_qniverse_code(circuit: CircuitIR) -> TranspileResult:
+    report = TranspilerReport(target="qniverse", target_version=TARGET_VERSION)
+    set_metrics(report, circuit)
+    qn, cn = qubit_names(circuit), clbit_names(circuit)
+    ops = prepare_ops(circuit, NATIVE, {"u3", "cx"}, report, "the Qniverse QSDK")
+>>>>>>> 7061dff (feat(c2): shared generator helpers, valid Qniverse/Cirq/CUDA-Q/Qiskit output, real verification)
 
+    body: List[str] = []
+    used = set()
+    ind = "    "
+    for op in ops:
+        name = op.name
+        qs = [qn[q] for q in op.qubits]
+        cond = op.condition
         if name == "barrier":
-            reg_groups: Dict[str, List[str]] = {}
-            for q_str in qubits:
-                r_prefix = q_str.split("[")[0]
-                reg_groups.setdefault(r_prefix, []).append(q_str)
-            for r_prefix, q_group in reg_groups.items():
-                if len(q_group) >= 2:
-                    lines.append(f"{indent}qc.add_gate(barrier, {q_group[0]}, {q_group[-1]})")
+            groups: Dict[str, List[str]] = {}
+            for q in qs:
+                groups.setdefault(q.split("[")[0], []).append(q)
+            for _, grp in groups.items():
+                if len(grp) >= 2:
+                    used.add("barrier")
+                    body.append(f"{ind}qc.add_gate(barrier, {grp[0]}, {grp[-1]})")
                 else:
-                    lines.append(f"{indent}# 1-qubit barrier on {q_group[0]} omitted: official QSDK requires a span of >= 2 qubits")
-        elif name == "reset":
-            for q in qubits:
-                lines.append(f"{indent}qc.add_gate(reset, {q})")
-        elif name == "measure":
-            for q, c in zip(qubits, clbits):
-                lines.append(f"{indent}qc.add_gate(measure, {q}, {c})")
-        else:
-            gate_expr = name
-            if params:
-                gate_expr = f"{name}({', '.join(params)})"
-
-            q_args = ", ".join(qubits)
-            if op.condition:
-                if isinstance(op.condition, tuple):
-                    cname, cval = op.condition
-                    lines.append(f"{indent}qc.add_conditional_gate({cname}, {cval}, {gate_expr}, {q_args})")
-                else:
-                    c = op.condition
-                    cond_reg = c.register
-                    lines.append(f"{indent}qc.add_conditional_gate({cond_reg}, {c.value}, {gate_expr}, {q_args})")
+                    body.append(f"{ind}# 1-qubit barrier on {grp[0]} omitted: the QSDK needs a span of 2 qubits")
+                    report.add_note("one-qubit barrier omitted: the QSDK requires a span of at least 2 qubits")
+            continue
+        if name in ("measure", "reset"):
+            if cond:
+                report.add_unsupported(f"Conditional {name}: the QSDK conditional gate cannot be a {name}", op.line, op.col)
+                continue
+            used.add(name)
+            if name == "measure":
+                body.append(f"{ind}qc.add_gate(measure, {qs[0]}, {cn[op.clbits[0]]})")
             else:
-                lines.append(f"{indent}qc.add_gate({gate_expr}, {q_args})")
+                body.append(f"{ind}qc.add_gate(reset, {qs[0]})")
+            continue
+        used.add(name)
+        gate_expr = name if not op.params else "%s(%s)" % (name, ", ".join(fmt_param(p) for p in op.params))
+        q_args = ", ".join(qs)
+        if cond:
+            if isinstance(cond, Condition):
+                report.add_unsupported(
+                    f"Bit-level condition {cond!r}: the QSDK only supports register-level conditions", op.line, op.col)
+                continue
+            body.append(f"{ind}qc.add_conditional_gate({py_name(cond[0])}, {cond[1]}, {gate_expr}, {q_args})")
+        else:
+            body.append(f"{ind}qc.add_gate({gate_expr}, {q_args})")
 
-    lines.append(f"\n{indent}return qc\n")
-
-    # 3. Runnable __main__
-    lines.append("if __name__ == '__main__':")
-    lines.append("    circuit = build_circuit()")
-    lines.append("    print('=== Generated QSDK Circuit ===')")
-    lines.append("    print('OpenQASM 2.0 Export:')")
-    lines.append("    print(circuit.qasm())")
-
-    code_str = "\n".join(lines) + "\n"
-    report.metrics = {
-        "num_qubits": circuit.num_qubits,
-        "num_clbits": circuit.num_clbits,
-        "total_ops": len(circuit.ops),
-        "gate_counts": gate_counts
-    }
-
-    return TranspileResult(target="qniverse", code=code_str, report=report)
+    names = ", ".join(sorted(used))
+    imp = lambda pkg: [f"    from {pkg}.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister"] + (
+        [f"    from {pkg}.gates import {names}"] if names else [])
+    lines = [
+        '"""',
+        "Generated by qnvkit OpenQASM 3.0 Transpiler",
+        f"Target Platform: C-DAC Qniverse QSDK ({TARGET_VERSION})",
+        '"""',
+        "try:",
+        *imp("Qniverse"),
+        "except ImportError:",
+        *imp("qniverse"),
+        "",
+        "",
+        "def build_circuit():",
+        f"{ind}qc = QniverseCircuit()",
+    ]
+    for r in circuit.qregs:
+        lines.append(f"{ind}{py_name(r.name)} = QuantumRegister({r.size}, '{r.name}')")
+        lines.append(f"{ind}qc.add_register({py_name(r.name)})")
+    for c in circuit.cregs:
+        lines.append(f"{ind}{py_name(c.name)} = ClassicalRegister({c.size}, '{c.name}')")
+        lines.append(f"{ind}qc.add_register({py_name(c.name)})")
+    lines.append("")
+    lines.extend(body)
+    lines.append(f"\n{ind}return qc\n")
+    lines += [
+        "",
+        "if __name__ == '__main__':",
+        "    circuit = build_circuit()",
+        "    print('=== Generated QSDK Circuit ===')",
+        "    print('OpenQASM 2.0 Export:')",
+        "    print(circuit.qasm())",
+    ]
+    return TranspileResult(target="qniverse", code="\n".join(lines) + "\n", report=report)
