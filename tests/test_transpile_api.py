@@ -38,8 +38,12 @@ def test_transpile_with_verification():
 
     q_ver = results["qiskit"].report.metrics.get("cross_framework_verification")
     assert q_ver is not None
-    assert q_ver["frameworks"]["qiskit"]["equivalent"] is True
-    assert q_ver["frameworks"]["qiskit"]["fidelity"] >= 1.0 - 1e-6
+    if q_ver["frameworks"]["qiskit"].get("executed"):
+        assert q_ver["frameworks"]["qiskit"]["equivalent"] is True
+        assert q_ver["frameworks"]["qiskit"]["fidelity"] >= 1.0 - 1e-6
+    else:
+        assert "not installed" in q_ver["frameworks"]["qiskit"].get("note", "")
+        assert results["qiskit"].report.equivalence_verified is None
 
     c_ver = results["cirq"].report.metrics.get("cross_framework_verification")
     assert c_ver is not None

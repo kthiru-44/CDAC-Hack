@@ -24,6 +24,7 @@ def test_qiskit_code_generation_and_execution():
     assert "qc.measure(q[0], c[0])" in res.code
 
     # Execute generated code directly
+    pytest.importorskip("qiskit")
     namespace = {}
     exec(res.code, namespace)
     assert "build_circuit" in namespace
@@ -48,6 +49,7 @@ def test_qiskit_conditional_execution():
     res = generate_qiskit_code(cir)
 
     assert "with qc.if_test((c" in res.code
+    pytest.importorskip("qiskit")
     namespace = {}
     exec(res.code, namespace)
     qc = namespace["build_circuit"]()
