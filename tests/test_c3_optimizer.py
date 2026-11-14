@@ -364,3 +364,53 @@ def test_unknown_pass_rejected():
     ir = CircuitIR(1, 0, (), (), ())
     with pytest.raises(ValueError, match="Unknown pass name"):
         optimize(ir, passes=["invalid_pass_name"])
+
+
+# ---------------------------------------------------------------- regression tests
+def _ir(ops, n=2):
+    return CircuitIR(n, 0, (Register("q", n),), (), tuple(ops))
+
+
+@pytest.mark.parametrize("gate", ["crx", "cry", "crz"])
+def test_controlled_rotation_is_not_identity_at_two_pi(gate):
+    """crz(pi) crz(pi) = crz(2*pi) is a Z on the control, not the identity (period is 4*pi)."""
+    ir = _ir([Op(gate, (0, 1), (np.pi,)), Op(gate, (0, 1), (np.pi,))])
+    res = optimize(ir, passes=["merge_rotations", "remove_identity"], fixed_point=True)
+    assert res.after.total_gates == 1
+    assert res.equivalence_verified is True and not res.warnings
+
+    full = _ir([Op(gate, (0, 1), (2 * np.pi,)), Op(gate, (0, 1), (2 * np.pi,))])
+    res = optimize(full, passes=["merge_rotations"])
+    assert res.after.total_gates == 0 and res.equivalence_verified is True
+
+
+def test_fixed_point_has_no_round_limit():
+    gates = "xyzh" * 3
+    ops = [Op(g, (0,)) for g in gates] + [Op(g, (0,)) for g in reversed(gates)]
+    res = optimize(_ir(ops, 1), fixed_point=True)
+    assert res.after.total_gates == 0 and res.rounds > 10
+
+
+def test_passes_all_and_summary():
+    ir = _ir([Op("s", (0,)), Op("sdg", (0,)), Op("cz", (0, 1)), Op("cz", (1, 0)), Op("h", (1,))])
+    res = optimize(ir, passes="all", fixed_point=True)
+    assert res.after.gate_counts == {"h": 1}
+    assert res.gates_removed == 4 and res.equivalence_verified is True
+    assert "Gates: 5 -> 1" in res.summary()
+    with pytest.raises(ValueError):
+        optimize(ir, passes="everything")
+
+
+def test_wrong_pass_result_is_never_returned(monkeypatch):
+    """A pass that breaks the circuit is caught: the original comes back with a warning."""
+    from qnvkit.optimize import passes as P
+
+    def broken(ir):
+        return CircuitIR(ir.num_qubits, ir.num_clbits, ir.qregs, ir.cregs, ir.ops[1:]), 1
+
+    monkeypatch.setitem(P.PASS_REGISTRY, "broken", broken)
+    ir = _ir([Op("h", (0,)), Op("cx", (0, 1))])
+    res = optimize(ir, passes=["broken"])
+    assert res.equivalence_verified is False
+    assert res.ir == ir and res.reduction_percentage == 0.0
+    assert any("equivalence" in w for w in res.warnings)

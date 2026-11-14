@@ -1,120 +1,142 @@
 """
-qnvkit.optimize.optimizer: Master optimization engine for QC-03-03.
-Applies safe, documented local rewrite passes, verifies non-mutation,
-and calculates before/after metrics using the shared profiler.
+qnvkit.optimize.optimizer: entry point of the QC-C3-03 circuit optimizer.
+
+``optimize(circuit)`` runs a pipeline of rewrite passes (``qnvkit.optimize.passes``) and
+returns an ``OptimizeResult`` holding a *new* circuit plus before/after metrics.
+
+Guarantees:
+  * the input circuit is never modified (the IR is immutable; a fingerprint check proves it);
+  * no pass adds a gate, so the gate count never grows;
+  * the result is checked against the input (unitary equal up to a global phase). If that
+    check ever fails, the original circuit is returned unchanged with a warning, so a wrong
+    circuit is never handed back.
 """
 
-from typing import Union, List, Optional, Any, Dict
+from typing import Any, List, Optional, Sequence, Tuple, Union
 from qnvkit.ir import CircuitIR
 from qnvkit.metrics import profile
 from qnvkit.report import OptimizeResult
 from qnvkit.qsdk_adapter import from_qniverse, to_qniverse
-from qnvkit.sim import check_unitary_equivalence, check_statevector_fidelity
-from qnvkit.optimize.passes import PASS_REGISTRY, MANDATORY_PASSES
+from qnvkit.sim import check_unitary_equivalence, check_random_state_equivalence
+from qnvkit.optimize.passes import ALL_PASSES, MANDATORY_PASSES, PASS_REGISTRY
+
+# Up to this size the full unitaries are compared; above it, output states for random inputs.
+FULL_UNITARY_MAX_QUBITS = 8
+# Above this size a state vector no longer fits comfortably in memory; the check is skipped.
+VERIFY_MAX_QUBITS = 20
+
+
+def _resolve_passes(passes: Union[None, str, Sequence[str]]) -> List[str]:
+    """Turns the ``passes`` argument into a validated list of pass names."""
+    if passes is None:
+        return list(MANDATORY_PASSES)
+    if isinstance(passes, str):
+        if passes != "all":
+            raise ValueError("passes must be a list of pass names, None (mandatory passes) or 'all'.")
+        return list(ALL_PASSES)
+    selected = list(passes)
+    if not selected:
+        raise ValueError("Pass list cannot be empty. Specify at least one pass or None for default.")
+    unknown = [p for p in selected if p not in PASS_REGISTRY]
+    if unknown:
+        raise ValueError(f"Unknown pass name(s): {unknown}. Available passes are: {list(PASS_REGISTRY)}")
+    return selected
+
+
+def _run_pipeline(ir: CircuitIR, pass_names: Sequence[str], fixed_point: bool) -> Tuple[CircuitIR, int]:
+    """
+    Applies the passes in order. With ``fixed_point`` the whole sequence is repeated until a
+    full round removes nothing (each productive round removes at least one gate, so this ends).
+    Returns the new IR and the number of rounds run.
+    """
+    rounds = 0
+    while True:
+        rounds += 1
+        removed = 0
+        for name in pass_names:
+            ir, count = PASS_REGISTRY[name](ir)
+            removed += count
+        if not fixed_point or removed == 0:
+            return ir, rounds
+
+
+def _verify(original: CircuitIR, optimized: CircuitIR) -> Tuple[Optional[bool], Optional[str]]:
+    """Checks that both circuits act identically. Returns ``(verdict, reason_if_not_checked)``."""
+    n = original.num_qubits
+    if n > VERIFY_MAX_QUBITS:
+        return None, f"Equivalence check skipped: {n} qubits exceeds the simulator limit of {VERIFY_MAX_QUBITS}."
+    try:
+        if n <= FULL_UNITARY_MAX_QUBITS:
+            return check_unitary_equivalence(original, optimized), None
+        return check_random_state_equivalence(original, optimized), None
+    except Exception as e:
+        return None, f"Equivalence check could not be run: {e}"
 
 
 def optimize(
     circuit: Union[Any, CircuitIR],
-    passes: Optional[List[str]] = None,
-    fixed_point: bool = False
+    passes: Union[None, str, Sequence[str]] = None,
+    fixed_point: bool = False,
 ) -> OptimizeResult:
     """
-    Optimizes a QniverseCircuit or CircuitIR using a documented set of safe local rewrite rules.
+    Optimizes a QniverseCircuit or CircuitIR with safe local rewrite rules.
 
     Parameters:
-      circuit: Input quantum circuit. Remains strictly unmodified.
-      passes: Optional list of pass names. Default: ["remove_identity", "cancel_self_inverse", "cancel_cx"].
-      fixed_point: If True, iteratively applies passes until no further reduction (max 10 iterations).
+      circuit: the input circuit. It is never modified.
+      passes: which passes to run, in this order.
+          ``None`` (default)  the three mandatory passes: remove_identity, cancel_self_inverse, cancel_cx
+          ``"all"``           every registered pass (adds cancel_extended_self_inverse,
+                              cancel_inverse_pairs, merge_rotations)
+          a list of names     exactly those passes; see ``PASS_REGISTRY``
+      fixed_point: ``False`` runs the pass list once. ``True`` repeats it until nothing more
+          can be removed, which catches nested redundancy such as ``X H H X``.
 
     Returns:
-      OptimizeResult dataclass with new optimized circuit, before/after ProfileReports,
-      applied passes, and reduction percentage.
+      OptimizeResult with
+        ``circuit``                a new QniverseCircuit,
+        ``ir``                     the same circuit as CircuitIR,
+        ``before`` / ``after``     ProfileReport (gate counts, depth, ...),
+        ``reduction_percentage``   drop in gate count,
+        ``equivalence_verified``   True / False / None (None: check not run),
+        ``warnings``               anything the caller should know.
+      ``print(result.summary())`` gives a readable before/after report.
+
+    Raises:
+      ValueError for ``None`` input, an empty pass list or an unknown pass name.
     """
     if circuit is None:
         raise ValueError("Input circuit cannot be None.")
+    pass_names = _resolve_passes(passes)
+    ir = circuit if isinstance(circuit, CircuitIR) else from_qniverse(circuit)
 
-    # Convert to CircuitIR if QniverseCircuit
-    if not isinstance(circuit, CircuitIR):
-        ir = from_qniverse(circuit)
-    else:
-        ir = circuit
+    fingerprint = ir.fingerprint()
+    optimized, rounds = _run_pipeline(ir, pass_names, fixed_point)
+    assert ir.fingerprint() == fingerprint, "Immutability violated: source circuit was modified!"
 
-    # Validate passes
-    if passes is None:
-        selected_passes = list(MANDATORY_PASSES)
-    else:
-        selected_passes = list(passes)
-        if not selected_passes:
-            raise ValueError("Pass list cannot be empty. Specify at least one pass or None for default.")
-
-    # Check unknown pass names
-    invalid_passes = [p for p in selected_passes if p not in PASS_REGISTRY]
-    if invalid_passes:
-        raise ValueError(
-            f"Unknown pass name(s): {invalid_passes}. "
-            f"Available passes are: {list(PASS_REGISTRY.keys())}"
-        )
-
-    # Immutability snapshot & before profile
-    initial_fingerprint = ir.fingerprint()
-    profile_before = profile(ir)
-
-    current_ir = ir
-    total_eliminated = 0
     warnings: List[str] = []
+    verified, not_checked = _verify(ir, optimized)
+    if not_checked:
+        warnings.append(not_checked)
+    if verified is False:
+        warnings.append("Mathematical equivalence check failed after optimization; "
+                        "the original circuit is returned unchanged.")
+        optimized = ir
 
-    # Execution loop
-    max_iters = 10 if fixed_point else 1
-    for iteration in range(max_iters):
-        iter_eliminated = 0
-        for pass_name in selected_passes:
-            pass_fn = PASS_REGISTRY[pass_name]
-            current_ir, count = pass_fn(current_ir)
-            iter_eliminated += count
-
-        total_eliminated += iter_eliminated
-        if iter_eliminated == 0 and fixed_point:
-            # Fixed point reached
-            break
-
-    # Immutability check
-    assert ir.fingerprint() == initial_fingerprint, "Immutability violated: source circuit was modified!"
-
-    profile_after = profile(current_ir)
-
-    # Reduction calculation
-    if profile_before.total_gates > 0:
-        reduction_pct = round(
-            ((profile_before.total_gates - profile_after.total_gates) / profile_before.total_gates) * 100.0,
-            2
-        )
-    else:
-        reduction_pct = 0.0
-
-    if reduction_pct < 0:
-        # Safety invariant: optimizer must never increase gate count
+    before, after = profile(ir), profile(optimized)
+    if after.total_gates > before.total_gates:  # cannot happen with the built-in passes
         warnings.append("Warning: Optimized circuit has more gates than original circuit.")
-
-    # Verify mathematical equivalence
-    try:
-        if ir.num_qubits <= 8:
-            eq = check_unitary_equivalence(ir, current_ir)
-        else:
-            eq = check_statevector_fidelity(ir, current_ir)
-        if not eq:
-            warnings.append("Mathematical equivalence check failed after optimization.")
-    except Exception as e:
-        warnings.append(f"Equivalence check could not be run: {e}")
-
-    # Convert back to fresh QniverseCircuit
-    optimized_qc = to_qniverse(current_ir)
+    reduction = 0.0
+    if before.total_gates:
+        reduction = round(100.0 * (before.total_gates - after.total_gates) / before.total_gates, 2)
 
     return OptimizeResult(
-        circuit=optimized_qc,
-        ir=current_ir,
-        before=profile_before,
-        after=profile_after,
-        passes_applied=tuple(selected_passes),
-        reduction_percentage=reduction_pct,
+        circuit=to_qniverse(optimized),
+        ir=optimized,
+        before=before,
+        after=after,
+        passes_applied=tuple(pass_names),
+        reduction_percentage=reduction,
         warnings=tuple(warnings),
+        equivalence_verified=verified,
+        rounds=rounds,
     )

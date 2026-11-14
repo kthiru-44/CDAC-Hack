@@ -50,6 +50,12 @@ for target, res in results.items():
     print(res.code)
 
 print("\n" + "#" * 70)
+print('2b. Run it: the original circuit next to every generated program')
+
+from qnvkit.transpile.verify import compare_counts, format_counts_table
+print(format_counts_table(compare_counts(QASM3_SOURCE, shots=1024)))
+
+print("\n" + "#" * 70)
 print('3. Structured report (CUDA-Q shown)')
 
 print(results["cudaq"].report.to_json(indent=2))

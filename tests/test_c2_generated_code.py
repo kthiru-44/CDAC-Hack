@@ -93,3 +93,33 @@ def test_cirq_conditions_on_bits_of_larger_register():
     import cirq
     res = cirq.Simulator(seed=3).run(ns["build_circuit"](), repetitions=20)
     assert set(res.records) == {"c_0", "c_1"}
+
+
+def test_compare_counts_runs_original_and_targets():
+    cmp = V.compare_counts(PROGRAMS["cond_reg"], shots=512)
+    runs = cmp["runs"]
+    assert runs["original"]["executed"] and sum(runs["original"]["counts"].values()) == 512
+    assert runs["qniverse"]["executed"]
+    for name, run in runs.items():
+        if run["executed"]:
+            assert run["tvd"] <= 0.1, (name, run)
+        else:
+            assert run["note"]
+    table = V.format_counts_table(cmp)
+    assert "original" in table and "TVD" in table
+
+
+def test_compare_counts_reports_missing_framework(monkeypatch):
+    monkeypatch.setattr(V, "HAS_CIRQ", False)
+    cmp = V.compare_counts(PROGRAMS["basic"], shots=64)
+    assert cmp["runs"]["cirq"] == {"executed": False, "note": "cirq not installed"}
+    assert "NOT RUN" in V.format_counts_table(cmp)
+
+
+def test_dynamic_verification_uses_reference_when_one_framework_present(monkeypatch):
+    monkeypatch.setattr(V, "HAS_CIRQ", False)
+    monkeypatch.setattr(V, "HAS_CUDAQ", False)
+    monkeypatch.setattr(V, "HAS_QISKIT", False)
+    rep = V.verify_equivalence(parse_qasm3(PROGRAMS["cond_reg"]))
+    q = rep["frameworks"]["qniverse"]
+    assert rep["reference_simulated"] and q["executed"] and q["equivalent"]

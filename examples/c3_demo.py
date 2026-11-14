@@ -94,10 +94,7 @@ def main():
     # 2. Run Mandatory Optimization Passes
     print("2. APPLYING MANDATORY PASSES: ['remove_identity', 'cancel_self_inverse', 'cancel_cx']")
     res_mandatory = optimize(qc, passes=["remove_identity", "cancel_self_inverse", "cancel_cx"])
-    print(f"  Gate Count: {res_mandatory.before.total_gates} -> {res_mandatory.after.total_gates}")
-    print(f"  Scheduled Depth: {res_mandatory.before.depth} -> {res_mandatory.after.depth}")
-    print(f"  Reduction: {res_mandatory.reduction_percentage}%")
-    print(f"  Gates Breakdown: {res_mandatory.after.gate_counts}\n")
+    print("  " + res_mandatory.summary().replace("\n", "\n  "))
 
     # 3. Run Full Pipeline with Extras (Inverse pairs, Rotation merging, Fixed Point)
     print("3. APPLYING FULL OPTIMIZATION PIPELINE (WITH EXTRAS & FIXED POINT):")
@@ -110,10 +107,7 @@ def main():
         "merge_rotations",
     ]
     res_full = optimize(qc, passes=all_passes, fixed_point=True)
-    print(f"  Gate Count: {res_full.before.total_gates} -> {res_full.after.total_gates}")
-    print(f"  Scheduled Depth: {res_full.before.depth} -> {res_full.after.depth}")
-    print(f"  Total Reduction: {res_full.reduction_percentage}%")
-    print(f"  Gates Breakdown: {res_full.after.gate_counts}")
+    print("  " + res_full.summary().replace("\n", "\n  "))
     print("\nOptimized OpenQASM 2.0 Export:")
     print("------------------------------")
     print(res_full.circuit.qasm().strip())
@@ -137,8 +131,8 @@ def main():
             print(f"  Current Credit Balance: {balance} credits")
             print("  Submitting optimized circuit to CPU qasm_simulator on QACC_Cluster...")
             res = runner.execute_circuit(res_full.circuit, processor="CPU", hpc="QACC_Cluster", simulator="qasm_simulator")
-            print(f"  Job Success! Job ID: {res['job_id']}")
-            print(f"  Execution Counts: {res['result'].get('counts')}")
+            print(f"  Job Success! Job ID: {res['job']} ({res['executed_on']})")
+            print(f"  Execution Result: {res['result']}")
         except Exception as e:
             print(f"  Cloud dispatch note: {e}")
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Builds notebooks/c1_demo_standalone.ipynb: the C1-01 demo notebook with the whole qnvkit
+Builds notebooks/c{1,2,3}_demo_standalone.ipynb: each demo notebook with the whole qnvkit
 package embedded, so a single file can be uploaded to Qniverse JupyterLab.
+
+Run this again after any change to src/qnvkit or to a notebooks/c*_demo.ipynb source notebook.
 
     python tools/build_standalone_notebook.py
 """
@@ -148,10 +150,12 @@ c2_path = os.path.join(ROOT, "notebooks", "c2_demo.ipynb")
 if os.path.exists(c2_path):
     nb2 = json.load(open(c2_path))
     cells2 = nb2["cells"]
-    cells2[1] = code('''
+    # c2_demo.ipynb starts with: title, pip install, imports. All three are replaced here.
+    imports_c2 = code('''
 import os, sys, json
 import qnvkit
 from qnvkit.transpile.api import transpile
+from qnvkit.transpile.verify import compare_counts, format_counts_table
 from qnvkit.qasm.parser3 import parse_qasm3
 from qnvkit.qasm.diagnostics import QASMError
 
@@ -182,7 +186,7 @@ PESU – C-DAC Quantum Hackathon 2026
 
 **Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second installs target frameworks for verification.
 ''')
-    nb2["cells"] = [cells2[0], unpack, pip_c2, framework_check, cells2[1]] + cells2[2:]
+    nb2["cells"] = [cells2[0], unpack, pip_c2, framework_check, imports_c2] + cells2[3:]
     out2 = os.path.join(ROOT, "notebooks", "c2_demo_standalone.ipynb")
     json.dump(nb2, open(out2, "w"), indent=1)
     print("wrote", out2, "(%d KB)" % (os.path.getsize(out2) // 1024))

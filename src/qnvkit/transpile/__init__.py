@@ -7,7 +7,7 @@ from qnvkit.transpile.qiskit_gen import generate_qiskit_code
 from qnvkit.transpile.cirq_gen import generate_cirq_code
 from qnvkit.transpile.cudaq_gen import generate_cudaq_code
 from qnvkit.transpile.qniverse_gen import generate_qniverse_code
-from qnvkit.transpile.verify import verify_equivalence
+from qnvkit.transpile.verify import verify_equivalence, compare_counts, format_counts_table
 
 __all__ = [
     "transpile",
@@ -17,4 +17,6 @@ __all__ = [
     "generate_cudaq_code",
     "generate_qniverse_code",
     "verify_equivalence",
+    "compare_counts",
+    "format_counts_table",
 ]

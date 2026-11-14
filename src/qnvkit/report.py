@@ -106,13 +106,40 @@ class DecomposeResult:
 @dataclass(frozen=True)
 class OptimizeResult:
     """Result of circuit optimization (QC-C3-03)."""
-    circuit: Any
-    ir: Any
+    circuit: Any                       # new QniverseCircuit (the input is never modified)
+    ir: Any                            # the optimized circuit as CircuitIR
     before: ProfileReport
     after: ProfileReport
     passes_applied: Tuple[str, ...]
-    reduction_percentage: float
+    reduction_percentage: float        # drop in gate count, in percent
     warnings: Tuple[str, ...] = ()
+    equivalence_verified: Optional[bool] = None   # None: the check was not run
+    rounds: int = 1                    # how many times the pass list was applied
+
+    @property
+    def gates_removed(self) -> int:
+        return self.before.total_gates - self.after.total_gates
+
+    @property
+    def depth_reduction_percentage(self) -> float:
+        if not self.before.depth:
+            return 0.0
+        return round(100.0 * (self.before.depth - self.after.depth) / self.before.depth, 2)
+
+    def summary(self) -> str:
+        verdict = {True: "verified (equal up to global phase)", False: "FAILED",
+                   None: "not checked"}[self.equivalence_verified]
+        lines = [
+            "--- Optimization Report ---",
+            f"Passes: {', '.join(self.passes_applied)} ({self.rounds} round{'s' if self.rounds != 1 else ''})",
+            f"Gates: {self.before.total_gates} -> {self.after.total_gates} "
+            f"({self.gates_removed} removed, {self.reduction_percentage}%)",
+            f"Depth: {self.before.depth} -> {self.after.depth} ({self.depth_reduction_percentage}%)",
+            f"Operation counts after: {self.after.gate_counts}",
+            f"Equivalence: {verdict}",
+        ]
+        lines += [f"Warning: {w}" for w in self.warnings]
+        return "\n".join(lines)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -120,6 +147,9 @@ class OptimizeResult:
             "after": self.after.to_dict(),
             "passes_applied": list(self.passes_applied),
             "reduction_percentage": self.reduction_percentage,
+            "depth_reduction_percentage": self.depth_reduction_percentage,
+            "equivalence_verified": self.equivalence_verified,
+            "rounds": self.rounds,
             "warnings": list(self.warnings),
         }
 

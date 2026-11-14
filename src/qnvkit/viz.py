@@ -125,39 +125,9 @@ def draw_circuit(circuit: Any, output: str = "text") -> str:
 
 
 def _simulate_numpy(ir: CircuitIR, shots: int = 1024) -> Tuple[Dict[str, int], str]:
-    """Pure-NumPy local statevector simulation and shot sampling."""
-    import numpy as np
-    from qnvkit.sim import compute_statevector
-
-    sv = compute_statevector(ir)
-    probs = np.abs(sv) ** 2
-    prob_sum = float(np.sum(probs))
-    if prob_sum > 0:
-        probs = probs / prob_sum
-    else:
-        probs = np.ones_like(probs) / len(probs)
-
-    rng = np.random.default_rng(1234)
-    samples = rng.choice(len(probs), size=shots, p=probs)
-    n = ir.num_qubits
-
-    measures = [op for op in ir.ops if op.name == "measure"]
-    counts: Dict[str, int] = {}
-    if measures:
-        num_clbits = max(ir.num_clbits, max((op.clbits[0] for op in measures), default=0) + 1)
-        for s in samples:
-            bits = ["0"] * num_clbits
-            for op in measures:
-                qubit_val = (int(s) >> op.qubits[0]) & 1
-                bits[op.clbits[0]] = str(qubit_val)
-            key = "".join(reversed(bits))
-            counts[key] = counts.get(key, 0) + 1
-    else:
-        for s in samples:
-            key = format(int(s), f"0{n}b")
-            counts[key] = counts.get(key, 0) + 1
-
-    return counts, "qnvkit Builtin Simulator (pure NumPy)"
+    """Pure-NumPy reference execution (handles mid-circuit measurement, reset and conditions)."""
+    from qnvkit.sim import sample_counts
+    return sample_counts(ir, shots=shots), "qnvkit Builtin Simulator (pure NumPy)"
 
 
 def simulate_circuit(circuit: Any, shots: int = 1024) -> Tuple[Dict[str, int], str]:

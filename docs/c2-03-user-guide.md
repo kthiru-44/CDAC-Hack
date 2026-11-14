@@ -51,10 +51,38 @@ Bit-level conditions on registers larger than one bit, and conditional measure/r
 - Bit order: qubit `q[i]` / classical bit `i` is bit `i` (little-endian). Printed bitstrings cover all classical bits with classical bit 0 right-most. Cirq state vectors are converted with an explicit qubit order; CUDA-Q's index order is calibrated at runtime with a one-gate circuit.
 
 ## Verification (`options={"verify": True}`)
-- Static circuits: each target's generated code is executed and its state vector compared with the reference simulator (fidelity). The QSDK route is `build_circuit()` -> `qc.qasm()` -> reference simulator.
-- Dynamic circuits (conditions, reset, gates after a measurement): the reference simulator cannot model them, so Qiskit (Aer), Cirq and CUDA-Q are sampled (4000 shots, seed 1234) and compared pairwise by total variation distance (tolerance 0.05). The QSDK stand-in is not sampled for these.
+Every check executes the generated code of a target and compares it with qnvkit's own reference simulation
+of the original circuit (`qnvkit.sim`, pure NumPy, independent of all targets).
+- Static circuits: state vectors are compared by fidelity. The QSDK route is `build_circuit()` -> `qc.qasm()` -> reference simulator.
+- Dynamic circuits (conditions, reset, gates after a measurement): each target is sampled (4000 shots, seed 1234) and its
+  count distribution is compared with the exact outcome distribution of the original circuit by total variation distance
+  (tolerance 0.05). The reference simulator follows mid-circuit measurement, reset and conditions exactly, so one installed
+  framework is enough for a check. The QSDK route is sampled too when the QSDK can express the circuit.
 - A missing framework or a check that did not run is reported `executed: False` with the reason; `equivalence_verified` stays `None`.
 - The QSDK check runs against the local stand-in unless the real Qniverse SDK is importable; the report says which.
+
+## Side-by-side execution (`compare_counts`)
+```python
+from qnvkit.transpile.verify import compare_counts, format_counts_table
+
+comparison = compare_counts(QASM3_SOURCE, shots=1024)   # OpenQASM text or CircuitIR
+print(format_counts_table(comparison))
+```
+Runs the **original circuit** (reference simulator) and the **generated** Qiskit, Cirq, CUDA-Q and QSDK programs for the
+same number of shots and prints one column of counts per run:
+
+| Row / column | Meaning |
+|---|---|
+| `exact p` | exact outcome probability of the original circuit (no sampling noise) |
+| `original` | counts of the original circuit on the reference simulator |
+| `qiskit`, `cirq`, `cudaq` | counts from executing the generated code on AerSimulator, `cirq.Simulator`, `cudaq.run` |
+| `qniverse` | generated QSDK program built, exported with `qc.qasm()` and sampled by the reference simulator |
+| `TVD` | total variation distance of that run to `exact p` (0 = identical) |
+| `match` | `yes` when TVD is within sampling noise: `max(0.05, sqrt(outcomes / shots))` |
+
+A framework that is not installed appears under the table as `NOT RUN` with the reason. `comparison["runs"][name]["counts"]`
+and `comparison["exact"]` hold the raw numbers. The demo notebook's last cell optionally submits the generated QSDK program
+as a Qniverse job (needs `QNIVERSE_API_KEY`).
 
 ## Versions tested
 qiskit 2.6.2, qiskit-aer 0.18.2, cirq-core 1.7.0, cudaq 0.16.0, Python 3.12 (all four frameworks) and Python 3.9 (core only, framework tests skipped).
@@ -63,5 +91,6 @@ qiskit 2.6.2, qiskit-aer 0.18.2, cirq-core 1.7.0, cudaq 0.16.0, Python 3.12 (all
 - `pow(k)` with non-integer k works only for a single rotation/phase gate (angle scaling) or the exact roots `z->s->t`, `x->sx`.
 - `if` conditions on `!=`, `<`, `>`; `while`; subroutines; timing; pulse-level constructs.
 - Barriers are dropped on Cirq and CUDA-Q.
-- The reference simulator ignores conditions, so dynamic circuits are compared statistically, not exactly.
+- Dynamic circuits are compared statistically (sampled counts against the exact distribution), not by state vector.
+- The reference simulator branches on every mid-circuit measurement and stops with an error above 16384 branches.
 - Nothing was run on the real Qniverse platform; only the local stand-in.

@@ -96,3 +96,30 @@ def test_endianness_conversion():
     assert converted[2] == 1.0
     assert converted[1] == 0.0
 
+
+
+# ---------------------------------------------------------------- reference sampler
+def test_exact_distribution_static_and_bit_order():
+    from qnvkit.qasm.parser3 import parse_qasm3
+    from qnvkit.sim import exact_distribution
+    ir = parse_qasm3('OPENQASM 3.0; qubit[2] q; bit[2] c; x q[0]; c = measure q;')
+    assert exact_distribution(ir) == {"01": 1.0}          # classical bit 0 right-most
+    bell = parse_qasm3('OPENQASM 3.0; qubit[2] q; h q[0]; cx q[0], q[1];')   # no measurement: all qubits
+    d = exact_distribution(bell)
+    assert set(d) == {"00", "11"} and abs(d["00"] - 0.5) < 1e-12
+
+
+def test_exact_distribution_follows_conditions_and_reset():
+    from qnvkit.qasm.parser3 import parse_qasm3
+    from qnvkit.sim import exact_distribution, sample_counts
+    feed = parse_qasm3('OPENQASM 3.0; qubit[2] q; bit[2] c; h q[0]; c[0] = measure q[0]; '
+                       'if (c[0] == 1) x q[1]; c[1] = measure q[1];')
+    d = exact_distribution(feed)
+    assert set(d) == {"00", "11"} and abs(d["11"] - 0.5) < 1e-12
+    reg = parse_qasm3('OPENQASM 3.0; qubit[2] q; bit[2] c; bit[1] d; x q[0]; c[0] = measure q[0]; '
+                      'if (c == 2) x q[1]; d[0] = measure q[1];')
+    assert exact_distribution(reg) == {"001": 1.0}        # register value is 1, not 2: x is skipped
+    rst = parse_qasm3('OPENQASM 3.0; qubit[1] q; bit[1] c; h q[0]; reset q[0]; c[0] = measure q[0];')
+    assert exact_distribution(rst) == {"0": 1.0}
+    counts = sample_counts(feed, shots=500, seed=3)
+    assert sum(counts.values()) == 500 and set(counts) <= {"00", "11"}

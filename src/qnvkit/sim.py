@@ -6,7 +6,7 @@ Provides invariant checking up to global phase: |Tr(U_a^dagger @ U_b)| / 2^n >= 
 
 from typing import Dict, Any, List, Tuple
 import numpy as np
-from qnvkit.ir import CircuitIR, Op
+from qnvkit.ir import CircuitIR, Condition, Op
 from qnvkit.gates import get_gate_info
 
 
@@ -113,6 +113,130 @@ def compute_statevector(ir: CircuitIR, endianness: str = "little") -> np.ndarray
 
 
 
+# ---------------------------------------------------------------- measurement outcomes
+MAX_BRANCHES = 1 << 14
+
+
+def _condition_holds(ir: CircuitIR, op: Op, bits: int) -> bool:
+    """Evaluates an op's classical condition against ``bits`` (flat classical bit i is bit i)."""
+    cond = op.condition
+    if not cond:
+        return True
+    name, value = cond[0], cond[1]
+    index = cond.index if isinstance(cond, Condition) else None  # a plain tuple tests the whole register
+    offset = 0
+    for reg in ir.cregs:
+        if reg.name == name:
+            if index is not None:
+                return ((bits >> (offset + index)) & 1) == (value & 1)
+            return ((bits >> offset) & ((1 << reg.size) - 1)) == value
+        offset += reg.size
+    raise KeyError("Classical register '%s' not found" % name)
+
+
+def _project(state: np.ndarray, qubit: int, n: int, outcome: int) -> Tuple[np.ndarray, float]:
+    """Projects ``qubit`` onto ``outcome``. Returns the (unnormalised) state and its probability."""
+    index = [slice(None)] * n
+    index[n - 1 - qubit] = 1 - outcome
+    out = state.copy()
+    out[tuple(index)] = 0.0
+    return out, float(np.vdot(out, out).real)
+
+
+def exact_distribution(ir: CircuitIR) -> Dict[str, float]:
+    """
+    Exact probability of every classical outcome of the circuit, starting from |0...0>.
+
+    Unlike ``compute_statevector`` this models the whole program: mid-circuit measurement,
+    reset and classically conditioned operations. Every measurement splits the simulation
+    into one branch per outcome; trailing unconditioned measurements are read off the state
+    vector directly, so a static circuit costs a single state-vector simulation.
+
+    Keys are bitstrings over all classical bits with classical bit 0 right-most. A circuit
+    without any measurement is treated as "measure every qubit" (qubit 0 right-most).
+    """
+    n = ir.num_qubits
+    ops = [op for op in ir.ops if op.name != "barrier"]
+    if not any(op.name == "measure" for op in ops):
+        ops += [Op("measure", (q,), clbits=(q,)) for q in range(n)]
+        width = n
+    else:
+        width = max(ir.num_clbits, 1 + max(op.clbits[0] for op in ops if op.name == "measure"))
+
+    # Trailing unconditioned measurements need no branching.
+    tail = len(ops)
+    while tail > 0 and ops[tail - 1].name == "measure" and not ops[tail - 1].condition:
+        tail -= 1
+
+    start = np.zeros((2,) * n, dtype=complex)
+    start[(0,) * n] = 1.0
+    branches: List[Tuple[int, np.ndarray, float]] = [(0, start, 1.0)]  # (classical bits, state, probability)
+
+    for op in ops[:tail]:
+        nxt: List[Tuple[int, np.ndarray, float]] = []
+        for bits, state, prob in branches:
+            if not _condition_holds(ir, op, bits):
+                nxt.append((bits, state, prob))
+            elif op.name in ("measure", "reset"):
+                q = op.qubits[0]
+                for outcome in (0, 1):
+                    projected, p = _project(state, q, n, outcome)
+                    if p < 1e-12:
+                        continue
+                    projected = projected / np.sqrt(p)
+                    if op.name == "measure":
+                        c = op.clbits[0]
+                        new_bits = (bits & ~(1 << c)) | (outcome << c)
+                    else:
+                        new_bits = bits
+                        if outcome:  # reset: bring the qubit back to |0>
+                            projected = _apply_gate_to_state(projected, get_gate_info("x").matrix_fn(()), (q,), n)
+                    nxt.append((new_bits, projected, prob * p))
+            else:
+                nxt.append((bits, _apply_gate_to_state(state, _get_op_matrix(op), op.qubits, n), prob))
+        if len(nxt) > MAX_BRANCHES:
+            raise RuntimeError("Circuit has too many measurement branches for the reference simulator.")
+        branches = nxt
+
+    basis = np.arange(1 << n)
+    totals: Dict[int, float] = {}
+    for bits, state, prob in branches:
+        outcome_bits = np.full(1 << n, bits, dtype=object if width > 62 else np.int64)
+        for op in ops[tail:]:
+            q, c = op.qubits[0], op.clbits[0]
+            outcome_bits = (outcome_bits & ~(1 << c)) | (((basis >> q) & 1) << c)
+        weights = prob * np.abs(state.reshape(-1)) ** 2
+        for key, w in zip(outcome_bits.tolist(), weights.tolist()):
+            if w > 1e-15:
+                totals[key] = totals.get(key, 0.0) + w
+
+    norm = sum(totals.values()) or 1.0
+    return {format(k, "0%db" % width): v / norm for k, v in sorted(totals.items())}
+
+
+def sample_counts(ir: CircuitIR, shots: int = 1024, seed: int = 1234) -> Dict[str, int]:
+    """
+    Reference execution of a circuit: ``shots`` samples drawn from ``exact_distribution``.
+    Same key format (all classical bits, classical bit 0 right-most).
+    """
+    dist = exact_distribution(ir)
+    keys = list(dist)
+    drawn = np.random.default_rng(seed).multinomial(shots, [dist[k] for k in keys])
+    return {k: int(c) for k, c in zip(keys, drawn) if c}
+
+
+def unitary_fidelity(ir_a: CircuitIR, ir_b: CircuitIR) -> float:
+    """
+    Process fidelity |Tr(U_a^dagger @ U_b)| / 2^n of two circuits on the same qubits.
+    1.0 means the unitaries are equal up to an unobservable global phase.
+    """
+    if ir_a.num_qubits != ir_b.num_qubits:
+        return 0.0
+    u_a = compute_unitary(ir_a)
+    u_b = compute_unitary(ir_b)
+    return float(np.abs(np.trace(u_a.conj().T @ u_b)) / (1 << ir_a.num_qubits))
+
+
 def check_unitary_equivalence(ir_a: CircuitIR, ir_b: CircuitIR, tol: float = 1e-5) -> bool:
     """
     Verifies that ir_a and ir_b implement the exact same unitary up to an unobservable global phase.
@@ -120,17 +244,10 @@ def check_unitary_equivalence(ir_a: CircuitIR, ir_b: CircuitIR, tol: float = 1e-
     """
     if ir_a.num_qubits != ir_b.num_qubits:
         return False
-    n = ir_a.num_qubits
-    if n > 8:
-        # High qubit count: fall back to statevector comparison on several states
+    if ir_a.num_qubits > 8:
+        # High qubit count: fall back to statevector comparison
         return check_statevector_fidelity(ir_a, ir_b, tol=tol)
-        
-    u_a = compute_unitary(ir_a)
-    u_b = compute_unitary(ir_b)
-    
-    trace_val = np.abs(np.trace(u_a.conj().T @ u_b))
-    fidelity = trace_val / (1 << n)
-    return bool(fidelity >= (1.0 - tol))
+    return bool(unitary_fidelity(ir_a, ir_b) >= (1.0 - tol))
 
 
 def check_statevector_fidelity(ir_a: CircuitIR, ir_b: CircuitIR, tol: float = 1e-5) -> bool:

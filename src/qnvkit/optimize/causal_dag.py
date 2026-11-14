@@ -1,101 +1,88 @@
 """
-qnvkit.optimize.causal_dag: Causal wire adjacency engine and barrier collision tracker.
-Guarantees that two gates are considered adjacent if and only if no intervening operation
-(barrier, measurement, reset, conditional, or non-commuting gate) touches their wires.
+qnvkit.optimize.causal_dag: wire-adjacency engine behind every pair rewrite.
+
+A circuit is a list of operations, but list order is not what matters physically: ``X q0``,
+``H q1``, ``X q0`` has the two X gates next to each other on wire q0 even though H sits
+between them in the list. The tracker therefore keeps, for every qubit wire, the ordered list
+of operations touching it. Two operations are *strictly adjacent* when, on every wire they
+act on, the second is the very next operation after the first.
+
+Anything on a shared wire in between (another gate, a barrier, a measurement, a reset)
+breaks adjacency, and classically conditioned operations are never paired. That is what
+makes the rewrites in ``passes.py`` safe.
 """
 
-from typing import List, Dict, Set, Tuple, Optional, Callable
+from typing import Callable, Dict, List, Set, Tuple
 from qnvkit.ir import CircuitIR, Op
+
+NON_UNITARY = ("barrier", "measure", "reset")
 
 
 class CausalWireTracker:
-    """
-    Maintains an ordered timeline of operations per qubit wire to perform
-    provably safe adjacency checks in O(N) time.
-    """
+    """Per-wire timeline of a circuit, built once in O(number of operations)."""
+
     def __init__(self, ir: CircuitIR):
         self.ir = ir
         self.num_qubits = ir.num_qubits
         self.ops = list(ir.ops)
-        
-        # Build wire trace: wire index -> list of op indices
+
+        # wire -> indices (into self.ops) of the operations on that wire, in circuit order
         self.wire_trace: Dict[int, List[int]] = {q: [] for q in range(self.num_qubits)}
-        # Lookup table: (wire, op_index) -> position in wire_trace[wire]
+        # (wire, op index) -> position of that operation within wire_trace[wire]
         self.pos_in_wire: Dict[Tuple[int, int], int] = {}
-        
+
         for idx, op in enumerate(self.ops):
             for q in op.qubits:
                 if q < self.num_qubits:
-                    pos = len(self.wire_trace[q])
+                    self.pos_in_wire[(q, idx)] = len(self.wire_trace[q])
                     self.wire_trace[q].append(idx)
-                    self.pos_in_wire[(q, idx)] = pos
 
     def are_strictly_adjacent(self, idx_a: int, idx_b: int) -> bool:
         """
-        Returns True if op at idx_a and op at idx_b are strictly adjacent on all shared wires,
-        with NO intervening operations (barriers, measurements, resets, or gates) between them.
+        True when ops ``idx_a`` and ``idx_b`` (a before b) are unconditioned unitary gates on
+        the same set of qubits with nothing between them on any of those wires.
         """
         if idx_a >= idx_b or idx_a < 0 or idx_b >= len(self.ops):
             return False
+        op_a, op_b = self.ops[idx_a], self.ops[idx_b]
 
-        op_a = self.ops[idx_a]
-        op_b = self.ops[idx_b]
-
-        # Must touch the exact same set of qubits
         if set(op_a.qubits) != set(op_b.qubits):
             return False
-
-        # If either operation is classically conditioned, do not rewrite
         if op_a.condition is not None or op_b.condition is not None:
             return False
-
-        # Non-unitary operations are never cancellation candidates
-        if op_a.name in ("barrier", "measure", "reset") or op_b.name in ("barrier", "measure", "reset"):
+        if op_a.name in NON_UNITARY or op_b.name in NON_UNITARY:
             return False
 
-        # Verify no intervening operation on ANY of the shared wires
         for q in op_a.qubits:
             pos_a = self.pos_in_wire.get((q, idx_a))
             pos_b = self.pos_in_wire.get((q, idx_b))
-            if pos_a is None or pos_b is None:
-                return False
-            # If pos_b is not immediately after pos_a, there is an intervening op on wire q!
-            if pos_a + 1 != pos_b:
-                return False
-
+            if pos_a is None or pos_b is None or pos_a + 1 != pos_b:
+                return False  # something else touches wire q in between
         return True
 
-    def find_all_adjacent_pairs(
-        self,
-        match_fn: Callable[[Op, Op], bool]
-    ) -> List[Tuple[int, int]]:
+    def find_all_adjacent_pairs(self, match_fn: Callable[[Op, Op], bool]) -> List[Tuple[int, int]]:
         """
-        Finds disjoint pairs of operation indices (i, j) that are strictly adjacent
-        and satisfy match_fn(op_i, op_j).
+        Disjoint pairs ``(i, j)`` of strictly adjacent operations with ``match_fn(op_i, op_j)``.
+        Each operation appears in at most one pair, so ``G G G`` yields one pair and keeps one G.
         """
-        matched_indices: Set[int] = set()
+        matched: Set[int] = set()
         pairs: List[Tuple[int, int]] = []
 
         for i, op_a in enumerate(self.ops):
-            if i in matched_indices:
-                continue
-            if not op_a.qubits or op_a.name in ("barrier", "measure", "reset") or op_a.condition:
+            if i in matched or not op_a.qubits or op_a.name in NON_UNITARY or op_a.condition:
                 continue
 
-            # Look at the next operation on the primary wire
-            primary_wire = op_a.qubits[0]
-            pos = self.pos_in_wire.get((primary_wire, i))
-            if pos is None or pos + 1 >= len(self.wire_trace[primary_wire]):
+            # The only candidate partner is the next operation on any one of op_a's wires.
+            wire = op_a.qubits[0]
+            pos = self.pos_in_wire.get((wire, i))
+            if pos is None or pos + 1 >= len(self.wire_trace[wire]):
+                continue
+            j = self.wire_trace[wire][pos + 1]
+            if j in matched:
                 continue
 
-            j = self.wire_trace[primary_wire][pos + 1]
-            if j in matched_indices:
-                continue
-
-            op_b = self.ops[j]
-            if self.are_strictly_adjacent(i, j) and match_fn(op_a, op_b):
+            if self.are_strictly_adjacent(i, j) and match_fn(op_a, self.ops[j]):
                 pairs.append((i, j))
-                matched_indices.add(i)
-                matched_indices.add(j)
+                matched.update((i, j))
 
         return pairs
