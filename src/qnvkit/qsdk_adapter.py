@@ -109,8 +109,18 @@ def from_qniverse(qc: Any) -> CircuitIR:
 
 
 def unrepresentable_barriers(ir: CircuitIR) -> int:
-    """Number of one-qubit barriers, which the official SDK cannot hold (to_qniverse omits them)."""
-    return sum(1 for op in ir.ops if op.name == "barrier" and len(op.qubits) < 2)
+    """Number of barrier ops whose wires cannot be represented in QSDK (e.g. < 2 qubits per register)."""
+    count = 0
+    reg_map = ir.get_qubit_reg_map()
+    for op in ir.ops:
+        if op.name == "barrier":
+            by_reg = {}
+            for q in op.qubits:
+                r_name = reg_map[q][0] if q in reg_map else "q"
+                by_reg.setdefault(r_name, []).append(q)
+            if not any(len(g) >= 2 for g in by_reg.values()):
+                count += 1
+    return count
 
 
 def to_qniverse(ir: CircuitIR) -> Any:
@@ -130,6 +140,7 @@ def to_qniverse(ir: CircuitIR) -> Any:
         cregs[r.name] = reg
         cbits.extend(reg[i] for i in range(r.size))
 
+    reg_map = ir.get_qubit_reg_map()
     for op in ir.ops:
         qs = [qbits[q] for q in op.qubits]
         if op.name == "measure":
@@ -142,9 +153,14 @@ def to_qniverse(ir: CircuitIR) -> Any:
             # The official SDK (qniverse 1.0.6) raises "Barrier requires at least two qubits" in
             # qc.qasm() for a one-qubit barrier, so such barriers cannot be represented. A barrier
             # has no effect on the unitary; it is omitted here (the IR keeps it, see unrepresentable_barriers).
-            # add_gate accepts a barrier with exactly two qubits: the start and end of a span.
-            if len(op.qubits) >= 2:
-                qc.add_gate(_gate_object("barrier"), qbits[min(op.qubits)], qbits[max(op.qubits)])
+            # add_gate accepts a barrier with exactly two qubits: the start and end of a span within a register.
+            by_reg = {}
+            for q in op.qubits:
+                r_name = reg_map[q][0] if q in reg_map else "q"
+                by_reg.setdefault(r_name, []).append(q)
+            for r_name, group in by_reg.items():
+                if len(group) >= 2:
+                    qc.add_gate(_gate_object("barrier"), qbits[min(group)], qbits[max(group)])
         elif op.condition:
             cname, cval = op.condition
             qc.add_conditional_gate(cregs[cname], int(cval), _gate_object(op.name, op.params), *qs)

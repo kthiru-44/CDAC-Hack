@@ -156,10 +156,13 @@ class QniverseCircuit:
                 # Observed on the official SDK (qniverse 1.0.6): qc.qasm() raises this error.
                 raise ValueError("Barrier requires at least two qubits")
             if gate.name == "barrier":
-                # two qubits = start and end of a span (same register assumed)
-                reg = bits[0].register
-                lo, hi = sorted((bits[0].index, bits[1].index))
-                lines.append("barrier %s;" % ", ".join("%s[%d]" % (reg.prefix, i) for i in range(lo, hi + 1)))
+                # two qubits = start and end of a span (if same register)
+                if len(bits) == 2 and bits[0].register is bits[1].register:
+                    reg = bits[0].register
+                    lo, hi = sorted((bits[0].index, bits[1].index))
+                    lines.append("barrier %s;" % ", ".join("%s[%d]" % (reg.prefix, i) for i in range(lo, hi + 1)))
+                else:
+                    lines.append("barrier %s;" % ", ".join(repr(b) for b in bits))
                 continue
             params = "(%s)" % ", ".join(repr(p) for p in gate.params) if gate.params else ""
             lines.append("%s%s%s %s;" % (prefix, gate.name, params, ", ".join(repr(b) for b in bits)))

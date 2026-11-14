@@ -12,6 +12,7 @@ def test_qniverse_code_generation():
 
     h q[0];
     cx q[0], q[1];
+    barrier q[0], q[1];
     c[0] = measure q[0];
     c[1] = measure q[1];
     """
@@ -22,7 +23,8 @@ def test_qniverse_code_generation():
     assert "qc = QniverseCircuit" in res.code
     assert "qc.add_gate(h, q[0])" in res.code
     assert "qc.add_gate(cx, q[0], q[1])" in res.code
-    assert "qc.add_gate('measure', q[0], c[0])" in res.code
+    assert "qc.add_gate(barrier, q[0], q[1])" in res.code
+    assert "qc.add_gate(measure, q[0], c[0])" in res.code
 
 
 def test_qsdk_adapter_direct_conversion():

@@ -81,15 +81,21 @@ def generate_qniverse_code(circuit: CircuitIR) -> TranspileResult:
         params = [f"{p:.12g}" for p in op.params]
 
         if name == "barrier":
-            if len(qubits) >= 2:
-                lines.append(f"{indent}qc.add_gate('barrier', {qubits[0]}, {qubits[-1]})")
-            else:
-                lines.append(f"{indent}# 1-qubit barrier omitted: official QSDK requires a span of >= 2 qubits")
+            reg_groups: Dict[str, List[str]] = {}
+            for q_str in qubits:
+                r_prefix = q_str.split("[")[0]
+                reg_groups.setdefault(r_prefix, []).append(q_str)
+            for r_prefix, q_group in reg_groups.items():
+                if len(q_group) >= 2:
+                    lines.append(f"{indent}qc.add_gate(barrier, {q_group[0]}, {q_group[-1]})")
+                else:
+                    lines.append(f"{indent}# 1-qubit barrier on {q_group[0]} omitted: official QSDK requires a span of >= 2 qubits")
         elif name == "reset":
-            lines.append(f"{indent}qc.add_gate('reset', {qubits[0]})")
+            for q in qubits:
+                lines.append(f"{indent}qc.add_gate(reset, {q})")
         elif name == "measure":
-            if qubits and clbits:
-                lines.append(f"{indent}qc.add_gate('measure', {qubits[0]}, {clbits[0]})")
+            for q, c in zip(qubits, clbits):
+                lines.append(f"{indent}qc.add_gate(measure, {q}, {c})")
         else:
             gate_expr = name
             if params:
