@@ -176,22 +176,27 @@ if os.path.exists(c3_path):
     cells3 = nb3["cells"]
     cells3[1] = code('''
 import os, sys
-import qnvkit
+import qnvkit, qnvkit.qsdk_adapter as adapter          # must be imported before Qniverse
 from qnvkit.optimize import optimize
 from qnvkit.metrics import profile
-from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, ClassicalRegister
-from Qniverse.gates import h, x, y, z, s, sdg, t, tdg, rz, cx, cz, swap, barrier, measure
+from qnvkit.qsdk_adapter import from_qniverse, to_qniverse
+from qnvkit.sim import check_unitary_equivalence
+
+from Qniverse.QniverseCircuit import *
+from Qniverse.gates import *
+import numpy as np
 
 print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
+print("QSDK in use:", adapter.qsdk_description())
 print("qnvkit optimizer ready!")
 ''')
     cells3[0] = md('''
 # QC-C3-03: Quantum Circuit Optimization Using QSDK
 PESU – C-DAC Quantum Hackathon 2026
 
-**Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package.
+**Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second reports whether the **official Qniverse QSDK** is in use.
 ''')
-    nb3["cells"] = [cells3[0], unpack, cells3[1]] + cells3[2:]
+    nb3["cells"] = [cells3[0], unpack, diagnose, cells3[1], check] + cells3[2:]
     out3 = os.path.join(ROOT, "notebooks", "c3_demo_standalone.ipynb")
     json.dump(nb3, open(out3, "w"), indent=1)
     print("wrote", out3, "(%d KB)" % (os.path.getsize(out3) // 1024))
