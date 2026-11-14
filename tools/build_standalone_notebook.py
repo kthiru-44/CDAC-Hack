@@ -46,8 +46,10 @@ _PKG = """
 """
 _dir = os.path.abspath("qnvkit_pkg")
 zipfile.ZipFile(io.BytesIO(base64.b64decode(_PKG.replace("\\n", "")))).extractall(_dir)
-if _dir not in sys.path:
-    sys.path.insert(0, _dir)
+# Always use THIS embedded copy: put it first and drop any older qnvkit already imported or on the path.
+sys.path[:] = [_dir] + [p for p in sys.path if p != _dir]
+for _m in [m for m in sys.modules if m == "qnvkit" or m.startswith("qnvkit.")]:
+    del sys.modules[_m]
 print("qnvkit unpacked to", _dir)
 ''' % payload)
 
@@ -74,6 +76,19 @@ print(adapter.read_qasm(_probe))
 ''')
 
 cells = nb["cells"]
+# The repo notebook searches for src folders; the standalone one must only use its embedded copy.
+cells[1] = code('''
+import qnvkit, qnvkit.qsdk_adapter as adapter          # must be imported before Qniverse
+from qnvkit.metrics import profile
+from qnvkit.decompose.decomposer import decompose
+
+from Qniverse.QniverseCircuit import *
+from Qniverse.gates import *
+import numpy as np
+
+print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
+print("QSDK in use:", adapter.qsdk_description())
+''')
 cells[0] = md('''
 # QC-C1-01: Circuit Profiling and Limited Basis-Gate Decomposition
 PESU – C-DAC Quantum Hackathon 2026
