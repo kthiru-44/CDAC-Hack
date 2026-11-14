@@ -8,15 +8,26 @@ The earlier "verified compiler" open-innovation plan is **dropped**. We solve pu
 - Only the registered Qniverse email. Open-source libraries allowed, but show them working with the QSDK.
 - AI use must be declared (`07-ai-usage.md`). Submit all code and docs. C-DAC holds the rights to the documentation.
 
-## Weights (as told to us for this event)
-| Class | Checkpoint | Weight |
+## Evaluation Weights & Criteria
+**Criteria Breakdown:**
+| Criterion | Weight | What it covers |
 |---|---|---|
-| 1 | ~3 h in | **0.4** |
-| 2 | mid-event | **0.3** |
-| 3 | final | **0.2** |
+| **Product / Application Delivery** | **0.4 (40%)** | The actual working project, code quality, test suite, and QSDK integration |
+| **Judges' Evaluations** | **0.3 (30%)** | Technical rigor, novelty, equivalence checks, and meeting all problem specifications |
+| **Presentation & Viva-Voce** | **0.2 (20%)** | Visual before/after demo, defense of complexity, and answering judges' questions |
 
-Class 1 is worth the most and is the cheapest, so it must be **complete and polished first**. Evaluation criteria
-(rules §5) still apply: product 40%, judges 35%, presentation 15%, viva 10%.
+**Checkpoints & Problem Classes (from Rules §3):**
+- **Class 1 (Checkpoint 1, ~3 h in):** 20% of class evaluation — *QC-C1-01*
+- **Class 2 (Checkpoint 2, mid-event):** 30% of class evaluation — *QC-C2-03*
+- **Class 3 (Final Checkpoint):** 50% of class evaluation — *QC-C3-03*
+
+Product delivery (0.4) is the largest single scoring component: **every problem must have a working, non-crashing proof of concept**.
+
+## Target Framework Versions
+All generated code and transpilation targets must use the **latest stable versions**:
+- **Qiskit:** `>= 1.0.0` (modern `qiskit.circuit` and `qiskit.transpiler` APIs, avoiding legacy `qiskit.execute`)
+- **Cirq:** `>= 1.4.0` (standard `cirq.Circuit`, `cirq.Simulator`)
+- **NVIDIA CUDA-Q:** `>= 0.8.0` / `>= 0.9.0` (standard `@cudaq.kernel` syntax)
 
 ## Our picks
 | Class | Problem | Why |

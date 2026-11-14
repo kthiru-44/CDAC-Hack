@@ -15,7 +15,7 @@
 
 ## Problem 2 — QC-C2-03 OpenQASM 3.0 transpiler to Qiskit, Cirq, CUDA-Q
 - **Parser:** declarations, registers, gate definitions, parameter expressions, supported control flow; source locations for errors.
-- **Generators:** one per target, using documented APIs for pinned versions. Preserve qubit mapping, measurement-to-classical-bit mapping, parameters, order.
+- **Generators:** one per target, using documented APIs for latest stable versions (Qiskit 1.0+, Cirq 1.4+, CUDA-Q 0.8+). Preserve qubit mapping, measurement-to-classical-bit mapping, parameters, order.
 - **Report:** target, status, warnings, unsupported constructs with locations.
 - **Evidence:** run generated code on each framework's simulator; compare statevectors or distributions (watch bit-order conventions across frameworks).
 
