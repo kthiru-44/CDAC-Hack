@@ -140,7 +140,7 @@ PESU – C-DAC Quantum Hackathon 2026
 
 **Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second reports whether the **official Qniverse QSDK** is in use.
 ''')
-nb1["cells"] = [cells1[0], unpack, pip_install_common, diagnose, cells1[1], check] + cells1[2:]
+nb1["cells"] = [cells1[0], unpack, pip_install_common, diagnose, cells1[1], check] + cells1[3:]
 out1 = os.path.join(ROOT, "notebooks", "c1_demo_standalone.ipynb")
 json.dump(nb1, open(out1, "w"), indent=1)
 print("wrote", out1, "(%d KB)" % (os.path.getsize(out1) // 1024))
@@ -218,7 +218,7 @@ PESU – C-DAC Quantum Hackathon 2026
 
 **Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package; the second installs target frameworks for verification.
 ''')
-    nb3["cells"] = [cells3[0], unpack, pip_install_common, diagnose, cells3[1], check] + cells3[2:]
+    nb3["cells"] = [cells3[0], unpack, pip_install_common, diagnose, cells3[1], check] + cells3[3:]
     out3 = os.path.join(ROOT, "notebooks", "c3_demo_standalone.ipynb")
     json.dump(nb3, open(out3, "w"), indent=1)
     print("wrote", out3, "(%d KB)" % (os.path.getsize(out3) // 1024))
