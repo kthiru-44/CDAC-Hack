@@ -14,7 +14,7 @@ The visualizations are shown in the window at the bottom of the Qniverse workspa
 
   * **Visualizations** : Visualizations characterize your circuit as you build it. They use a single-shot state vector simulator, which is different from the system specified in run settings. Note that the visualizations ignore any measurement operations you add. Click on Run to get results from the listed backend. The Visualization here has been categorized as Probability Distribution and State Vector.
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/12/visulaizations.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/12/visulaizations.mp4?_=1)
+[▶️ Video Demonstration: visulaizations.mp4](https://qniverse.in/wp-content/uploads/2024/12/visulaizations.mp4)
 
 ## Probability Distribution****
 ![](../assets/images/Probability-distribution.png)

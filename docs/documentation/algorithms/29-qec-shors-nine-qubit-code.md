@@ -16,7 +16,7 @@ The Shor 9-qubit code, introduced by Peter Shor in 1995, is one of the earliest 
 
 **Presenting here with a video tour of how the Shor’s Nine-Qubit Code is implemented****in Qniverse:**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/07/QEC9-bit.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/07/QEC9-bit.mp4?_=1)
+[▶️ Video Demonstration: QEC9-bit.mp4](https://qniverse.in/wp-content/uploads/2025/07/QEC9-bit.mp4)
 
 ## How Shor’s nine-Qubit Code works?
 

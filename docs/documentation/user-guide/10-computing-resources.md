@@ -14,7 +14,7 @@ Compute resources encompass various types of hardware that perform computational
 
 **Also presented here is a brief video tour showing how to access a detailed section for resources being used in the Qniverse application for job simulations and results.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/compute-resources_new-.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/compute-resources_new-.mp4?_=1)
+[▶️ Video Demonstration: compute-resources_new-.mp4](https://qniverse.in/wp-content/uploads/2025/04/compute-resources_new-.mp4)
 
 ## Central Processing Unit****
 **Function** : The primary processor in a computer is responsible for executing general-purpose instructions and managing system operations.

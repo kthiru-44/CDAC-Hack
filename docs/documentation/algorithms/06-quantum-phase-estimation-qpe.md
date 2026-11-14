@@ -28,7 +28,7 @@ The eigenvalues of unitary operators are complex numbers of the form e^2πiθ, w
 
 **Starting with a short video tour of how the circuit looks for the 2-Qubit Selection and the results obtained on submitting the circuit with parameters set for the Unitary operator as Phase operator and Theta(θ) as pi/2.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/05/QPE.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/05/QPE.mp4?_=1)
+[▶️ Video Demonstration: QPE.mp4](https://qniverse.in/wp-content/uploads/2024/05/QPE.mp4)
 
 ## Why is QPE Important?
 

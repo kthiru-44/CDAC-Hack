@@ -14,7 +14,7 @@ Quantum walks are quantum analogs of classical random walks. In a classical rand
 
 **Presented here with a short video tour of how quantum walks with Hadamard coin selection is implemented**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/12/quantum-walk-new.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/12/quantum-walk-new.mp4?_=1)
+[▶️ Video Demonstration: quantum-walk-new.mp4](https://qniverse.in/wp-content/uploads/2024/12/quantum-walk-new.mp4)
 
 ## Key Components of a Quantum Walk
 

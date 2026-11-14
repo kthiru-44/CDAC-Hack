@@ -18,7 +18,7 @@ The algorithm works by using a set of qubits in superposition, an auxiliary qubi
 
 The key to this algorithm’s efficiency is the use of quantum parallelism, which allows us to explore all possible inputs simultaneously. This is achieved through the superposition of states in the quantum register. Thus, the algorithm only requires one query to find the hidden string, in contrast to the classical algorithm, which requires O(n) queries.
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/bernstein-algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/bernstein-algo.mp4?_=1)
+[▶️ Video Demonstration: bernstein-algo.mp4](https://qniverse.in/wp-content/uploads/2025/04/bernstein-algo.mp4)
 
 ## How does the Bernstein-Vazirani algorithm work?
 

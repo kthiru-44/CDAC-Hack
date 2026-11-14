@@ -14,7 +14,7 @@ Here in this section, you can build your quantum circuit by dragging gates onto 
 
 **Here is a brief video tour explaining the composer area and its functionalities.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/composer-area-tools.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/composer-area-tools.mp4?_=1)
+[▶️ Video Demonstration: composer-area-tools.mp4](https://qniverse.in/wp-content/uploads/2025/04/composer-area-tools.mp4)
 
 A user can name his/her circuit as below for easy access. If the user doesn’t provide any name to the circuit, then by default, the circuit is named with the circuit job ID along with a prefix “Circuit” appended. For eg: Circuit_1288  
 

@@ -20,7 +20,7 @@ The Steane code is important because it combines theoretical clarity with practi
 
 **Presenting here with a short video tour of the implementation of Steane Seven Qubit Code in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/09/Steane-7-qubit-algo-2.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/09/Steane-7-qubit-algo-2.mp4?_=1)
+[▶️ Video Demonstration: Steane-7-qubit-algo-2.mp4](https://qniverse.in/wp-content/uploads/2025/09/Steane-7-qubit-algo-2.mp4)
 
 ## How is encoding done in Steane Code?
 

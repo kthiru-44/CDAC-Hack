@@ -20,7 +20,7 @@ The probabilities of observing each outcome in a given basis are determined by t
 
 **An overview of the Gate Matrices for gates is presented here:**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/1de8-d6a7-4383-ba24-b07b46fd31ab.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/1de8-d6a7-4383-ba24-b07b46fd31ab.mp4?_=1)
+[▶️ Video Demonstration: 1de8-d6a7-4383-ba24-b07b46fd31ab.mp4](https://qniverse.in/wp-content/uploads/2025/04/1de8-d6a7-4383-ba24-b07b46fd31ab.mp4)
 
 A qubit state |ψ⟩ = α |0⟩ + β |1⟩ is fully described by two complex numbers α and β. Before working with gates and the Bloch sphere, it is worth being precise about what these numbers represent.
 

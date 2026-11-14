@@ -30,9 +30,11 @@ The documentation is organized into four core modules:
 
 | Section | Description | Articles | Location |
 |---|---|:---:|---|
+| **[Platform Overview](docs-portal-overview.md)** | Main Qniverse documentation landing page, resource cards, and portal highlights. | 1 | `docs/documentation/docs-portal-overview.md` |
+| **[Release Notes](release-notes.md)** | Complete release history (v1.6.0 through v1.0.0), detailing new CPU/GPU simulators and features. | 1 | `docs/documentation/release-notes.md` |
 | **[User Guide](user-guide/)** | Getting started, account setup, Circuit Composer, Code Editor, hardware backends, noise modeling, visualization, and execution. | 16 | `docs/documentation/user-guide/` |
 | **[Quantum Algorithms](algorithms/)** | 30 comprehensive algorithm tutorials with mathematical expressions, circuit steps, complexity analysis, and video walkthroughs. | 30 | `docs/documentation/algorithms/` |
-| **[QSDK Documentation](qsdk/)** | Official Python SDK guide, installation across OSs, registers, gate construction, custom modules, backend selection, and remote job submission. | 14 | `docs/documentation/qsdk/` |
+| **[QSDK Documentation](qsdk/)** | Official Python SDK guide, installation across OSs, registers, gate construction, custom modules, backend selection, and remote job submission. | 15 | `docs/documentation/qsdk/` |
 | **[FAQ & Troubleshooting](faq-and-troubleshooting/)** | Platform feedback, error troubleshooting, terms of service, and privacy policies. | 2 | `docs/documentation/faq-and-troubleshooting/` |
 
 ---

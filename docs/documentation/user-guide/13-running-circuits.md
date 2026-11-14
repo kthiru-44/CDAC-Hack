@@ -12,7 +12,7 @@ breadcrumb: "Home > Docs > User Guide > Running Circuits"
 
 **Running Quantum Circuits: A Guide**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/running-circuits.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/running-circuits.mp4?_=1)
+[▶️ Video Demonstration: running-circuits.mp4](https://qniverse.in/wp-content/uploads/2025/04/running-circuits.mp4)
 
 **1\. Platform Selection**
 

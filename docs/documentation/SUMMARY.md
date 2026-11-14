@@ -2,6 +2,7 @@
 
 * [Introduction](README.md)
 * [Platform Overview](docs-portal-overview.md)
+* [Release Notes](release-notes.md)
 
 ## User Guide
 * [Introduction to Qniverse](user-guide/01-introduction-to-qniverse.md)

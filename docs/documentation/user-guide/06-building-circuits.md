@@ -50,7 +50,7 @@ breadcrumb: "Home > Docs > User Guide > Building Circuits"
 
 **Here is a short video demonstrating how users can create a custom gate and perform related operations.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/custom-gates.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/custom-gates.mp4?_=1)
+[▶️ Video Demonstration: custom-gates.mp4](https://qniverse.in/wp-content/uploads/2025/04/custom-gates.mp4)
 
   1. **Design a Custom Gate:** Combine a sequence of existing gates to create a new, more complex gate. This can help modularize your circuit design or represent frequently used subroutines.
 

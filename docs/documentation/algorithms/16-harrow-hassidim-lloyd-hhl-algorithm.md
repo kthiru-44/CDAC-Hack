@@ -14,7 +14,7 @@ The Harrow-Hassidim-Lloyd (HHL) algorithm is a quantum algorithm designed to sol
 
 **Presenting here with a short video tour of how the HHL Algorithm is implemented and runs in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/HHL-algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/HHL-algo.mp4?_=1)
+[▶️ Video Demonstration: HHL-algo.mp4](https://qniverse.in/wp-content/uploads/2025/04/HHL-algo.mp4)
 
 ## Steps of HHL Algorithm
 

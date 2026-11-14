@@ -44,4 +44,4 @@ Perform swap gates to reverse the order of the qubits.
 
 **Starting with a short video tour of how the circuit looks for the 2-Qubit Selection and the results obtained on submitting the circuit.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/05/QFT-2.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/05/QFT-2.mp4?_=1)
+[▶️ Video Demonstration: QFT-2.mp4](https://qniverse.in/wp-content/uploads/2024/05/QFT-2.mp4)

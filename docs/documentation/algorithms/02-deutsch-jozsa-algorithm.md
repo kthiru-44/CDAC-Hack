@@ -22,7 +22,7 @@ By using the Deutsch-Jozsa approach, it is possible to determine whether a given
 
 **Starting here with a video that shows how the Deutsch-Jozsa algorithm is loaded with the given parameters, with a 2-qubit selection**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/12/DJ-Algorithm-2.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/12/DJ-Algorithm-2.mp4?_=1)
+[▶️ Video Demonstration: DJ-Algorithm-2.mp4](https://qniverse.in/wp-content/uploads/2024/12/DJ-Algorithm-2.mp4)
 
 **The Deutsch-Jozsa algorithm has a 5-step process.**
 

@@ -16,7 +16,7 @@ Click **Run****** in the upper right corner. Select an available system simulato
 
 **Demonstrated here with a video tour of the options available at the backend to submit the job on CPU, GPU, FPGA, Vector Card, and QPU backend systems.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/backend-systems.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/backend-systems.mp4?_=1)
+[▶️ Video Demonstration: backend-systems.mp4](https://qniverse.in/wp-content/uploads/2025/04/backend-systems.mp4)
 
 ## Select Processor
 

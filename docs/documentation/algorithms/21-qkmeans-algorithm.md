@@ -16,7 +16,7 @@ Quantum KMeans (QKMeans) is a hybrid clustering algorithm that leverages quantum
 
 **Presenting here with a short video tour of how the QKMean Algorithm is implemented and runs in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/05/QkMean-algo-2.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/05/QkMean-algo-2.mp4?_=1)
+[▶️ Video Demonstration: QkMean-algo-2.mp4](https://qniverse.in/wp-content/uploads/2025/05/QkMean-algo-2.mp4)
 
 ## How Quantum KMeans Differs from Classical KMeans
 

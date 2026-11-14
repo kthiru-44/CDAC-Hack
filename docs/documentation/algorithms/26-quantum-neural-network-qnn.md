@@ -16,7 +16,7 @@ Quantum Neural Network (QNN) is a hybrid learning framework that integrates quan
 
 Presenting here with a video tour of how the Quantum Neural Networks(QNN) work in Qniverse:
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/07/QPCA-Algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/07/QPCA-Algo.mp4?_=1)
+[▶️ Video Demonstration: QPCA-Algo.mp4](https://qniverse.in/wp-content/uploads/2025/07/QPCA-Algo.mp4)
 
 ## How Quantum Neural Networks Differ from Classical Neural Networks
 

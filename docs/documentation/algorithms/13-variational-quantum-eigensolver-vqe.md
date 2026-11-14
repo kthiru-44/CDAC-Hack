@@ -14,7 +14,7 @@ VQE is a hybrid quantum-classical algorithm designed to estimate the expectation
 
 **Presenting here with a short video tour of how the VQE Algorithm is implemented and runs in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/vqe.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/vqe.mp4?_=1)
+[▶️ Video Demonstration: vqe.mp4](https://qniverse.in/wp-content/uploads/2025/04/vqe.mp4)
 
 ## How does VQE work?
 

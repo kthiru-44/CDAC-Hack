@@ -58,7 +58,7 @@ Once the period (p) is found, Shor’s algorithm uses a mathematical technique (
 
 **Showing a video example for the number 42 and the corresponding circuit generated in editable Qiskit.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/05/Shors-Algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/05/Shors-Algo.mp4?_=1)
+[▶️ Video Demonstration: Shors-Algo.mp4](https://qniverse.in/wp-content/uploads/2024/05/Shors-Algo.mp4)
 
 ## How is Shor’s Algorithm achieved?
 

@@ -18,7 +18,7 @@ Superdense coding allows for transmitting two classical bits of information usin
 
 **Below is a short video showing how the circuit looks for the 2-Qubit Selection with an “11” input for the secret message.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/05/Superdense-coding.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/05/Superdense-coding.mp4?_=1)
+[▶️ Video Demonstration: Superdense-coding.mp4](https://qniverse.in/wp-content/uploads/2024/05/Superdense-coding.mp4)
 
 ## How is Superdense Coding achieved?
 

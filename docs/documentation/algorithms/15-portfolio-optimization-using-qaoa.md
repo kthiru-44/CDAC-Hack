@@ -14,7 +14,7 @@ QAOA Portfolio Optimization is a hybrid quantum–classical asset selection and 
 
 **Presenting here with a short video tour of the implementation of QAOA Portfolio optimization in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/10/QAOA-algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/10/QAOA-algo.mp4?_=1)
+[▶️ Video Demonstration: QAOA-algo.mp4](https://qniverse.in/wp-content/uploads/2025/10/QAOA-algo.mp4)
 
 ## How QAOA Portfolio Optimization Differs from Classical Mean–Variance?
 

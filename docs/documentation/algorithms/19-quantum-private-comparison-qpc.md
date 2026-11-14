@@ -25,7 +25,7 @@ The implementation successfully realizes the core comparison logic of the protoc
 
 **Presenting here with a short video tour of how the QPC Algorithm is implemented and runs in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/QPC-algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/QPC-algo.mp4?_=1)
+[▶️ Video Demonstration: QPC-algo.mp4](https://qniverse.in/wp-content/uploads/2025/04/QPC-algo.mp4)
 
 ## Algorithm Description
 

@@ -33,7 +33,7 @@ To solve Simon’s problem classically, one needs to find two different inputs x
 
 `
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/simon-algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/simon-algo.mp4?_=1)
+[▶️ Video Demonstration: simon-algo.mp4](https://qniverse.in/wp-content/uploads/2025/04/simon-algo.mp4)
 
 ## How does Simon’s Algorithm work?
 

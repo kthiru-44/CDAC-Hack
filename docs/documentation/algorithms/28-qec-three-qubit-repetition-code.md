@@ -14,7 +14,7 @@ Quantum Error Correction (QEC) is a crucial field in quantum computing aimed at 
 
 **Presenting here with a video tour of how the Quantum Error Correction Algorithm works:**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/06/QEC-Algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/06/QEC-Algo.mp4?_=1)
+[▶️ Video Demonstration: QEC-Algo.mp4](https://qniverse.in/wp-content/uploads/2025/06/QEC-Algo.mp4)
 
 **Bit-Flip Error**
 

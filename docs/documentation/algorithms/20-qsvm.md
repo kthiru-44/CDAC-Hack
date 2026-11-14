@@ -16,7 +16,7 @@ Quantum Support Vector Machines (QSVMs) represent an innovative fusion of quantu
 
 **Presenting here with a short video tour of how the QSVM Algorithm is implemented and runs in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/QSVM-Algo-trimmed.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/QSVM-Algo-trimmed.mp4?_=1)
+[▶️ Video Demonstration: QSVM-Algo-trimmed.mp4](https://qniverse.in/wp-content/uploads/2025/04/QSVM-Algo-trimmed.mp4)
 
 ## Evolution from Classical SVMs to Quantum SVMs
 

@@ -14,7 +14,7 @@ The User Profile section is an area within the qniverse where users can manage a
 
 The video below provides users on how to update his/her profile details and also add/update an IBM API Key
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/profilenew.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/profilenew.mp4?_=1)
+[▶️ Video Demonstration: profilenew.mp4](https://qniverse.in/wp-content/uploads/2025/04/profilenew.mp4)
 
 Users can update the details from the profile section:  
 **1\. Personal Information**

@@ -16,7 +16,7 @@ Quantum Hierarchical Clustering (QHC) is a hybrid clustering algorithm that inte
 
 **Presenting here with a video tour of how the Quantum Hierarchical Clustering(QHC) Algorithm works:**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/06/QHC-Algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/06/QHC-Algo.mp4?_=1)
+[▶️ Video Demonstration: QHC-Algo.mp4](https://qniverse.in/wp-content/uploads/2025/06/QHC-Algo.mp4)
 
 ## How Quantum Hierarchical Clustering Differs from Classical Hierarchical Clustering
 

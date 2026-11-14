@@ -16,7 +16,7 @@ Quantum Anonymous Veto (QAV) is a quantum protocol designed to allow a group of 
 
 **Presenting here with a short video tour of how the Quantum Veto Algorithm is implemented and runs in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/quantum-veto-algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/quantum-veto-algo.mp4?_=1)
+[▶️ Video Demonstration: quantum-veto-algo.mp4](https://qniverse.in/wp-content/uploads/2025/04/quantum-veto-algo.mp4)
 
 ## Theoretical Explanation of Protocol A
 

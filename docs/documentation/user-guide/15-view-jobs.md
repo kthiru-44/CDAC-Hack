@@ -14,7 +14,7 @@ Once your job is completed, the details are updated in the Jobs panel
 
 **Also presented here is a brief video tour showing how to access a detailed section for a specific job, along with other features such as job results with visualizations, output, and its corresponding circuit diagram with other operations.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/12/jobs-section.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/12/jobs-section.mp4?_=1)
+[▶️ Video Demonstration: jobs-section.mp4](https://qniverse.in/wp-content/uploads/2024/12/jobs-section.mp4)
 
 ## CPU Job Details****
 ![](../assets/images/IBMQPUjobs.png) ![](../assets/images/jobs-first-section.png) ![](../assets/images/jobs-second-section.png)

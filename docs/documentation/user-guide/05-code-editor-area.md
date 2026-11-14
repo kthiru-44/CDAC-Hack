@@ -14,7 +14,7 @@ As a unified platform, you can build your circuit or code once and execute it ac
 
 **Here is a quick video tour demonstrating how the code editor area interacts with the gates to construct a circuit from code.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/12/code-editor-area-2-1.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/12/code-editor-area-2-1.mp4?_=1)
+[▶️ Video Demonstration: code-editor-area-2-1.mp4](https://qniverse.in/wp-content/uploads/2024/12/code-editor-area-2-1.mp4)
 
 ## Features of the Code Editor
 

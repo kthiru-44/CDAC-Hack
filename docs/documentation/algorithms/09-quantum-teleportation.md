@@ -16,7 +16,7 @@ Quantum teleportation is a protocol that enables the transfer of the _precise qu
 
 **Below is a short video showing how the circuit looks for the 3-Qubit Selection with the option to set the parameters α and β with the condition****α + β = 1 to be satisfied.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/03/quantum-teleportation.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/03/quantum-teleportation.mp4?_=1)
+[▶️ Video Demonstration: quantum-teleportation.mp4](https://qniverse.in/wp-content/uploads/2025/03/quantum-teleportation.mp4)
 
 ## Process of Teleportation?
 

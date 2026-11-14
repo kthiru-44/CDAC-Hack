@@ -82,9 +82,11 @@ def clean_html_to_markdown(html_content: str, page_url: str, rel_image_prefix: s
             if source:
                 src = source.get('src')
         if src:
+            clean_src = src.split('?')[0]
+            filename = os.path.basename(clean_src)
             p = soup.new_tag('p')
-            a = soup.new_tag('a', href=src)
-            a.string = f"▶️ Video Demonstration: {src}"
+            a = soup.new_tag('a', href=clean_src)
+            a.string = f"▶️ Video Demonstration: {filename}"
             p.append(a)
             video.replace_with(p)
             
@@ -366,6 +368,32 @@ url: "{url}"
 """, encoding='utf-8')
             print(f"  [SAVED] docs-portal-overview.md")
 
+def scrape_release_notes():
+    print(f"\n==========================================")
+    print(f"Scraping Release Notes...")
+    print(f"==========================================")
+    url = "https://qniverse.in/release-notes/"
+    raw_html = fetch_url(url).decode('utf-8', errors='ignore')
+    if raw_html:
+        soup = BeautifulSoup(raw_html, 'html.parser')
+        entry = soup.select_one('.entry-content, article, #main-content')
+        if entry:
+            md_body = clean_html_to_markdown(str(entry), url, rel_image_prefix="assets/images/")
+            out_file = BASE_DIR / "release-notes.md"
+            out_file.write_text(f"""---
+title: "Qniverse Platform Release Notes"
+category: "Platform"
+url: "{url}"
+---
+
+# Qniverse Platform Release Notes
+
+> **Source:** [{url}]({url})
+
+{md_body}
+""", encoding='utf-8')
+            print(f"  [SAVED] release-notes.md")
+
 def generate_readme_and_summary():
     print(f"\n==========================================")
     print(f"Generating Master README.md and SUMMARY.md...")
@@ -557,5 +585,6 @@ if __name__ == "__main__":
     scrape_betterdocs_group("FAQ and Troubleshooting", FAQ_PAGES, FAQ_DIR)
     scrape_sphinx_qsdk()
     scrape_docs_portal_index()
+    scrape_release_notes()
     generate_readme_and_summary()
     print("\n🎉 ALL DOCUMENTATION SCRAPED AND PROCESSED SUCCESSFULLY!")

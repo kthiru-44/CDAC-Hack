@@ -22,7 +22,7 @@ In the field of quantum computing and the quantum circuit model of computation, 
 
 **Also presented here is a short video tutorial on using these gates and their respective functionalities.**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/gate-pallet-new_MARCH.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/gate-pallet-new_MARCH.mp4?_=1)
+[▶️ Video Demonstration: gate-pallet-new_MARCH.mp4](https://qniverse.in/wp-content/uploads/2025/04/gate-pallet-new_MARCH.mp4)
 
 ## I Gate****
 **![](../assets/images/Screenshot-2026-02-20-121700.png)![](../assets/images/down-arrow-e1743600384822.png) ** ![](../assets/images/Identitygatematrix.png) **Identity****Gate Matrix**

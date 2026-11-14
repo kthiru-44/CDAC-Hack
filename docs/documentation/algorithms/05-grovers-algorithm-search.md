@@ -16,7 +16,7 @@ Grover’s algorithm provides a quadratic speedup over classical algorithms for 
 
 **We start here with a video that shows how the Grover’s algorithm is loaded with the given parameters with a 2-Qubit selection**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2024/05/Grovers-Algo.mp4?_=1](https://qniverse.in/wp-content/uploads/2024/05/Grovers-Algo.mp4?_=1)
+[▶️ Video Demonstration: Grovers-Algo.mp4](https://qniverse.in/wp-content/uploads/2024/05/Grovers-Algo.mp4)
 
 ## Steps of Grover’s Algorithm
 

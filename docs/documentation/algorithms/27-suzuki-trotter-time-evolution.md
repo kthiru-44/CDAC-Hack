@@ -24,7 +24,7 @@ where each $ P_j$ is a Pauli string (like $X \otimes Y \otimes Z$), and $\alpha_
 
 **Presenting here with a short video tour of how the Time-Evolution of a Quantum System using the Trotterization Algorithm works in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/10/Suzuki-Trotter-Algo-2.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/10/Suzuki-Trotter-Algo-2.mp4?_=1)
+[▶️ Video Demonstration: Suzuki-Trotter-Algo-2.mp4](https://qniverse.in/wp-content/uploads/2025/10/Suzuki-Trotter-Algo-2.mp4)
 
 **The core idea**
 

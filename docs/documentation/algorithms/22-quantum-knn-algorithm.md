@@ -16,7 +16,7 @@ QuantumKNN (QKNN) stands for Q-Kernel-based Nearest Neighbor is a quantum-enhanc
 
 **Presenting here with a short video tour of how the Quantum Veto Algorithm is implemented and runs in Qniverse**
 
-[▶️ Video Demonstration: https://qniverse.in/wp-content/uploads/2025/04/QKNN-Algo-2.mp4?_=1](https://qniverse.in/wp-content/uploads/2025/04/QKNN-Algo-2.mp4?_=1)
+[▶️ Video Demonstration: QKNN-Algo-2.mp4](https://qniverse.in/wp-content/uploads/2025/04/QKNN-Algo-2.mp4)
 
 ## How QuantumKNN Differs from Classical KNN?
 
