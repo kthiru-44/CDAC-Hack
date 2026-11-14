@@ -139,15 +139,23 @@ if os.path.exists(c2_path):
     nb2 = json.load(open(c2_path))
     cells2 = nb2["cells"]
     cells2[1] = code('''
-import os, sys
+import os, sys, json
 import qnvkit
 from qnvkit.transpile.api import transpile
 from qnvkit.qasm.parser3 import parse_qasm3
-from qnvkit.metrics import profile
-from qnvkit.decompose.decomposer import decompose
+from qnvkit.qasm.diagnostics import QASMError
 
 print("qnvkit loaded from:", os.path.dirname(qnvkit.__file__))
 print("qnvkit transpiler ready!")
+''')
+    pip2 = code('''
+# Cirq is optional: install it if missing so the Cirq target can be executed and verified.
+# Qiskit is expected on the platform; CUDA-Q is optional and reported as "not run" when absent.
+import importlib.util, subprocess, sys
+if importlib.util.find_spec("cirq") is None:
+    subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "cirq-core"], check=False)
+for _m in ("qiskit", "qiskit_aer", "cirq", "cudaq"):
+    print("%-11s %s" % (_m, "available" if importlib.util.find_spec(_m) else "not installed (reported as not run)"))
 ''')
     cells2[0] = md('''
 # QC-C2-03: OpenQASM 3.0 Transpiler across Qiskit, Cirq, CUDA-Q & QSDK
@@ -155,7 +163,7 @@ PESU – C-DAC Quantum Hackathon 2026
 
 **Single-file version:** upload only this notebook to Qniverse JupyterLab and run all cells. The first cell unpacks the embedded `qnvkit` package.
 ''')
-    nb2["cells"] = [cells2[0], unpack, cells2[1]] + cells2[2:]
+    nb2["cells"] = [cells2[0], unpack, pip2, cells2[1]] + cells2[2:]
     out2 = os.path.join(ROOT, "notebooks", "c2_demo_standalone.ipynb")
     json.dump(nb2, open(out2, "w"), indent=1)
     print("wrote", out2, "(%d KB)" % (os.path.getsize(out2) // 1024))
