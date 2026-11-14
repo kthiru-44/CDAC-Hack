@@ -105,3 +105,18 @@ def test_circuit_ir_flat_index_helpers():
     assert ir.flat_index_to_qubit(3) == ("anc", 0)
     assert ir.flat_index_to_qubit(0) == ("q", 0)
 
+
+def test_qniverse_circuit_draw_supports_silent_and_custom_kwargs():
+    qc = QniverseCircuit()
+    q = QuantumRegister(2, 'q')
+    qc.add_register(q)
+    qc.add_gate(h, q[0])
+
+    # Must accept silent=True without raising TypeError (as called internally by Qniverse run())
+    res = qc.draw(silent=True)
+    assert res is None or res == ""
+
+    # Normal draw should produce a valid box-drawing diagram
+    drawn = qc.draw(output="text")
+    assert "q" in str(drawn)
+

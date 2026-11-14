@@ -66,26 +66,45 @@ from Qniverse.QniverseCircuit import QniverseCircuit, QuantumRegister, Classical
 import Qniverse.gates as _qgates  # noqa: E402
 
 
-def _qniverse_circuit_draw(self, output="text", filename=None):
-    """Renders visual diagram for QniverseCircuit using Qiskit or rich fallback."""
-    if filename or (isinstance(output, str) and output.endswith((".svg", ".png", ".pdf"))):
-        target_file = filename or output
+def _qniverse_circuit_draw(self, *args, **kwargs):
+    """
+    Renders visual diagram for QniverseCircuit using Qiskit or native QSDK drawer.
+    Accepts all QSDK arguments (including silent=True, filename, etc.) without error.
+    """
+    orig = getattr(self, "_orig_draw", None)
+    # Always call official QSDK draw if available to generate self._svg_cache needed for run()
+    if callable(orig):
         try:
-            if hasattr(self, "_orig_draw") and callable(self._orig_draw):
-                return self._orig_draw(target_file)
+            res = orig(*args, **kwargs)
+            if kwargs.get("silent", False):
+                return res
         except Exception:
             pass
+
+    # When called with silent=True (internal to Qniverse run()), do not print anything
+    if kwargs.get("silent", False):
+        return None
+
+    target_file = kwargs.get("filename") or (args[0] if args and isinstance(args[0], str) else None)
+    if target_file and any(target_file.endswith(ext) for ext in (".svg", ".png", ".pdf", ".jpg")):
+        if callable(orig):
+            try:
+                return orig(target_file)
+            except Exception:
+                pass
+
+    out_fmt = kwargs.get("output", "text")
     try:
         from qiskit import QuantumCircuit as QC
         qasm_text = read_qasm(self)
-        drawn = QC.from_qasm_str(qasm_text).draw(output=output or "text")
+        qc_qk = QC.from_qasm_str(qasm_text)
+        drawn = qc_qk.draw(output=out_fmt)
         print(drawn)
         return drawn
     except Exception:
-        from qnvkit.viz import draw_circuit
-        drawn = draw_circuit(self, output=output or "text")
-        print(drawn)
-        return drawn
+        qasm_text = read_qasm(self)
+        print(qasm_text)
+        return qasm_text
 
 
 if not hasattr(QniverseCircuit, "_orig_draw"):

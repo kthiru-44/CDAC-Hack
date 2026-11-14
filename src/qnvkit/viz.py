@@ -44,82 +44,28 @@ def to_qasm2_str(circuit: Any) -> str:
     return emit_qasm2(ir)
 
 
-def _draw_ascii_circuit(ir: CircuitIR) -> str:
-    """Built-in pure-Python ASCII circuit diagram generator (zero dependencies)."""
-    n = ir.num_qubits
-    if n == 0:
-        return "(empty circuit)"
-    lines = [f"q_{i}: ─" for i in range(n)]
-    for op in ir.ops:
-        name = op.name.upper()
-        if op.name == "measure":
-            q = op.qubits[0]
-            for i in range(n):
-                lines[i] += "─[M]─" if i == q else "─────"
-        elif op.name == "barrier":
-            for i in range(n):
-                lines[i] += "──║──"
-        elif len(op.qubits) == 1:
-            q = op.qubits[0]
-            label = f"[{name}]"
-            w = len(label)
-            for i in range(n):
-                lines[i] += f"─{label}─" if i == q else "─" + "─" * w + "─"
-        elif len(op.qubits) == 2 and op.name in ("cx", "cnot"):
-            c, t = op.qubits[0], op.qubits[1]
-            low, high = min(c, t), max(c, t)
-            for i in range(n):
-                if i == c:
-                    lines[i] += "──●──"
-                elif i == t:
-                    lines[i] += "──X──"
-                elif low < i < high:
-                    lines[i] += "──┼──"
-                else:
-                    lines[i] += "─────"
-        elif len(op.qubits) == 2 and op.name == "cz":
-            c, t = op.qubits[0], op.qubits[1]
-            low, high = min(c, t), max(c, t)
-            for i in range(n):
-                if i in (c, t):
-                    lines[i] += "──●──"
-                elif low < i < high:
-                    lines[i] += "──┼──"
-                else:
-                    lines[i] += "─────"
-        else:
-            w = max(len(name) + 2, 5)
-            pad = "─" * w
-            for i in range(n):
-                if i in op.qubits:
-                    lines[i] += f"─[{name}]─"
-                else:
-                    lines[i] += f"─{pad}─"
-    return "\n".join(lines)
-
-
 def draw_circuit(circuit: Any, output: str = "text") -> str:
     """
-    Renders a circuit diagram as a string.
+    Renders a circuit diagram as a string using Qiskit box drawing or native circuit drawer.
 
     Parameters:
       circuit: QniverseCircuit, CircuitIR, or OpenQASM string.
-      output: 'text' for Unicode/ASCII box-drawing diagram.
+      output: 'text' for Unicode box-drawing diagram.
 
     Returns:
       String representation of the circuit diagram.
     """
+    if hasattr(circuit, "draw") and callable(circuit.draw):
+        try:
+            return str(circuit.draw(output=output))
+        except Exception:
+            pass
+
     try:
         from qiskit import QuantumCircuit
         qasm_str = to_qasm2_str(circuit)
         qc = QuantumCircuit.from_qasm_str(qasm_str)
         return str(qc.draw(output=output))
-    except Exception:
-        pass
-
-    try:
-        ir = to_ir(circuit)
-        return _draw_ascii_circuit(ir)
     except Exception:
         return to_qasm2_str(circuit).strip()
 
